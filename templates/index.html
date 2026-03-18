@@ -157,6 +157,12 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 .sched-cron{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent)}
 .sched-info{flex:1}
 .sched-db{font-size:11px;color:var(--muted);margin-top:2px}
+.sched-human{font-size:12px;color:var(--text2);margin-top:2px}
+/* ── Schedule builder ── */
+.sched-preset.active{background:var(--accent-bg)!important;border-color:var(--accent)!important;color:var(--accent)!important;font-weight:600!important}
+.weekday-btn{display:inline-flex;align-items:center;padding:5px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;color:var(--text2);transition:all .12s;user-select:none}
+.weekday-btn:has(input:checked){background:var(--accent-bg);border-color:var(--accent);color:var(--accent);font-weight:600}
+.weekday-btn input{display:none}
 
 /* ── Modal ── */
 .modal-backdrop{position:fixed;inset:0;background:rgba(15,20,40,.45);display:none;align-items:center;justify-content:center;z-index:200;backdrop-filter:blur(3px)}
@@ -577,8 +583,47 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 <div class="modal">
   <div class="modal-title">Add Schedule</div>
   <div class="form-group"><label>Database</label><select id="sched-db-id"></select></div>
-  <div class="form-group"><label>Cron Expression</label><input id="sched-cron" type="text" value="0 2 * * *"></div>
-  <div class="info-box"><b>Examples:</b> <code>0 2 * * *</code> = daily 02:00 &nbsp;•&nbsp; <code>0 */6 * * *</code> = every 6h &nbsp;•&nbsp; <code>0 3 * * 0</code> = Sun 03:00</div>
+  <hr class="section-sep">
+  <div class="section-label" style="margin-bottom:10px">Frequency</div>
+  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+    <button type="button" class="btn btn-ghost btn-sm sched-preset" data-preset="hourly" onclick="selectSchedPreset('hourly')">Every hour</button>
+    <button type="button" class="btn btn-ghost btn-sm sched-preset" data-preset="every4h" onclick="selectSchedPreset('every4h')">Every 4h</button>
+    <button type="button" class="btn btn-ghost btn-sm sched-preset" data-preset="every6h" onclick="selectSchedPreset('every6h')">Every 6h</button>
+    <button type="button" class="btn btn-ghost btn-sm sched-preset" data-preset="every12h" onclick="selectSchedPreset('every12h')">Every 12h</button>
+    <button type="button" class="btn btn-ghost btn-sm sched-preset active" data-preset="daily" onclick="selectSchedPreset('daily')">Daily</button>
+    <button type="button" class="btn btn-ghost btn-sm sched-preset" data-preset="weekly" onclick="selectSchedPreset('weekly')">Weekly</button>
+  </div>
+  <div id="sched-time-row" class="form-row" style="margin-bottom:13px">
+    <div class="form-group" style="margin-bottom:0">
+      <label>Hour (0–23)</label>
+      <input id="sched-hour" type="number" min="0" max="23" value="2" oninput="updateSchedCron()">
+    </div>
+    <div class="form-group" style="margin-bottom:0">
+      <label>Minute (0–59)</label>
+      <input id="sched-minute" type="number" min="0" max="59" value="0" oninput="updateSchedCron()">
+    </div>
+  </div>
+  <div id="sched-weekday-row" class="form-group hidden">
+    <label>Day of Week</label>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px">
+      <label class="weekday-btn"><input type="radio" name="sched-weekday" value="1" onchange="updateSchedCron()"> Mon</label>
+      <label class="weekday-btn"><input type="radio" name="sched-weekday" value="2" onchange="updateSchedCron()"> Tue</label>
+      <label class="weekday-btn"><input type="radio" name="sched-weekday" value="3" onchange="updateSchedCron()"> Wed</label>
+      <label class="weekday-btn"><input type="radio" name="sched-weekday" value="4" onchange="updateSchedCron()"> Thu</label>
+      <label class="weekday-btn"><input type="radio" name="sched-weekday" value="5" onchange="updateSchedCron()"> Fri</label>
+      <label class="weekday-btn"><input type="radio" name="sched-weekday" value="6" onchange="updateSchedCron()"> Sat</label>
+      <label class="weekday-btn"><input type="radio" name="sched-weekday" value="0" onchange="updateSchedCron()"> Sun</label>
+    </div>
+  </div>
+  <hr class="section-sep">
+  <div class="form-group">
+    <label style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <span>Schedule (cron)</span>
+      <button type="button" class="btn btn-ghost btn-sm" id="sched-adv-btn" onclick="toggleSchedAdvanced()">✎ Edit manually</button>
+    </label>
+    <input id="sched-cron" type="text" value="0 2 * * *" readonly style="background:var(--surface2);color:var(--text2);cursor:default">
+    <div id="sched-adv-note" style="font-size:11px;color:var(--muted);margin-top:4px">Generated automatically from the settings above</div>
+  </div>
   <div class="form-group"><label>Save To (empty = default)</label><input id="sched-save-path" type="text" placeholder="./dumps"></div>
   <div class="modal-footer">
     <button class="btn btn-ghost" onclick="closeModal('modal-sched')">Cancel</button>
@@ -601,7 +646,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 <div id="toast"></div>
 
 <script>
-const socket = io();
+let socket;
+try { socket = io(); } catch(e) { socket = { on() {}, emit() {} }; }
 let databases = [], schedules = [], history = [], dumpProgress = {}, bools = {};
 let chartTimeline = null, chartByDb = null;
 
@@ -676,46 +722,65 @@ async function refreshStats() {
       scales: { x: { ticks: { font: { size: 10 } } }, y: { ticks: { font: { size: 10 } } } } }
   });
 
-  // By DB chart — grouped bars: Min / Max / Last
+  // By DB chart — one merged column per DB: min→avg (green) + avg→max (amber) + thin Last marker
   if (chartByDb) chartByDb.destroy();
   const ctx2 = document.getElementById('chart-bydb').getContext('2d');
   const MB = v => parseFloat((v / 1048576).toFixed(2));
-  const dbLabels = s.by_db.map(d => d.name);
+  const dbData = s.by_db;
+  const dbLabels = dbData.map(d => d.name);
   chartByDb = new Chart(ctx2, {
     type: 'bar',
     data: {
       labels: dbLabels,
       datasets: [
         {
-          label: 'Min',
-          data: s.by_db.map(d => MB(d.min_size)),
+          label: 'Min → Avg',
+          data: dbData.map(d => [MB(d.min_size), MB(d.count > 0 ? d.total_size / d.count : d.min_size)]),
           backgroundColor: 'rgba(14,162,113,.55)',
           borderColor: '#0ea271', borderWidth: 1,
+          borderSkipped: false, order: 2,
+        },
+        {
+          label: 'Avg → Max',
+          data: dbData.map(d => [MB(d.count > 0 ? d.total_size / d.count : d.min_size), MB(d.max_size)]),
+          backgroundColor: 'rgba(208,138,0,.55)',
+          borderColor: '#d08a00', borderWidth: 1,
+          borderSkipped: false, order: 2,
         },
         {
           label: 'Last',
-          data: s.by_db.map(d => MB(d.last_size)),
-          backgroundColor: 'rgba(59,110,245,.7)',
-          borderColor: '#3b6ef5', borderWidth: 1,
-        },
-        {
-          label: 'Max',
-          data: s.by_db.map(d => MB(d.max_size)),
-          backgroundColor: 'rgba(208,138,0,.55)',
-          borderColor: '#d08a00', borderWidth: 1,
+          data: dbData.map(d => {
+            const lv = MB(d.last_size);
+            const span = MB(d.max_size) - MB(d.min_size);
+            const half = Math.max(span * 0.025, 0.02);
+            return [lv - half, lv + half];
+          }),
+          backgroundColor: 'rgba(59,110,245,.9)',
+          borderColor: '#3b6ef5', borderWidth: 0,
+          borderSkipped: false, barPercentage: 0.2, order: 1,
         },
       ]
     },
     options: {
+      grouped: false,
       responsive: true,
       plugins: {
         legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12 } },
         tooltip: {
+          mode: 'index',
           callbacks: {
-            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} MB`,
-            afterBody: (items) => {
-              const db = s.by_db[items[0].dataIndex];
-              return [`Dumps: ${db.count}`, `Avg: ${MB(db.total_size / db.count)} MB`];
+            label: (ctx) => {
+              if (ctx.datasetIndex !== 0) return null;
+              const db = dbData[ctx.dataIndex];
+              if (!db) return null;
+              const avg = db.count > 0 ? db.total_size / db.count : db.min_size;
+              return [
+                `Min:   ${MB(db.min_size)} MB`,
+                `Avg:   ${MB(avg)} MB`,
+                `Max:   ${MB(db.max_size)} MB`,
+                `Last:  ${MB(db.last_size)} MB`,
+                `Dumps: ${db.count}`,
+              ];
             }
           }
         }
@@ -1059,6 +1124,73 @@ async function runVerify(dumpId) {
 async function deleteHistory(id) { await api('DELETE',`/api/history/item/${id}`); renderHistory(); }
 
 // ── Schedules ─────────────────────────────────────────────
+let schedMode = 'daily', schedAdvanced = false;
+
+function cronToHuman(cron) {
+  const p = (cron || '').trim().split(/\s+/);
+  if (p.length !== 5) return cron;
+  const [mn, hr, , , wd] = p;
+  const toInt = (s, def = 0) => { const n = parseInt(s); return isNaN(n) ? def : n; };
+  const pad = n => String(n).padStart(2, '0');
+  if (hr === '*') {
+    if (mn === '*') return 'Every hour';
+    const m = toInt(mn);
+    return m === 0 ? 'Every hour' : `Every hour at :${pad(m)}`;
+  }
+  if (hr.startsWith('*/')) return `Every ${hr.slice(2)}h at :${pad(toInt(mn))}`;
+  const time = `${pad(toInt(hr))}:${pad(toInt(mn))}`;
+  if (wd === '*') return `Daily at ${time}`;
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dayIdx = toInt(wd, -1);
+  return `Every ${(dayIdx >= 0 && dayIdx <= 6) ? days[dayIdx] : wd} at ${time}`;
+}
+
+function updateSchedCron() {
+  if (schedAdvanced) return;
+  const hr = Math.min(23, Math.max(0, parseInt(document.getElementById('sched-hour').value) || 0));
+  const mn = Math.min(59, Math.max(0, parseInt(document.getElementById('sched-minute').value) || 0));
+  const wd = document.querySelector('input[name="sched-weekday"]:checked')?.value || '1';
+  let cron;
+  switch (schedMode) {
+    case 'hourly':   cron = `${mn} * * * *`; break;
+    case 'every4h':  cron = `${mn} */4 * * *`; break;
+    case 'every6h':  cron = `${mn} */6 * * *`; break;
+    case 'every12h': cron = `${mn} */12 * * *`; break;
+    case 'weekly':   cron = `${mn} ${hr} * * ${wd}`; break;
+    default:         cron = `${mn} ${hr} * * *`;
+  }
+  document.getElementById('sched-cron').value = cron;
+}
+
+function selectSchedPreset(preset) {
+  schedMode = preset;
+  document.querySelectorAll('.sched-preset').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.sched-preset[data-preset="${preset}"]`).classList.add('active');
+  const isInterval = ['hourly','every4h','every6h','every12h'].includes(preset);
+  document.getElementById('sched-time-row').classList.toggle('hidden', isInterval);
+  document.getElementById('sched-weekday-row').classList.toggle('hidden', preset !== 'weekly');
+  updateSchedCron();
+}
+
+function toggleSchedAdvanced() {
+  schedAdvanced = !schedAdvanced;
+  const input = document.getElementById('sched-cron');
+  const note  = document.getElementById('sched-adv-note');
+  const btn   = document.getElementById('sched-adv-btn');
+  if (schedAdvanced) {
+    input.removeAttribute('readonly');
+    input.style.background = ''; input.style.color = ''; input.style.cursor = '';
+    note.textContent = 'Edit cron manually. Format: minute hour day month weekday';
+    btn.textContent  = '✕ Back to builder';
+  } else {
+    input.setAttribute('readonly', '');
+    input.style.background = 'var(--surface2)'; input.style.color = 'var(--text2)'; input.style.cursor = 'default';
+    note.textContent = 'Generated automatically from the settings above';
+    btn.textContent  = '✎ Edit manually';
+    updateSchedCron();
+  }
+}
+
 async function loadSchedules() { schedules = await api('GET','/api/schedules'); }
 async function renderSchedules() {
   await loadDBs(); await loadSchedules();
@@ -1068,7 +1200,11 @@ async function renderSchedules() {
   el.innerHTML = schedules.map(s => {
     const db = dbMap[s.db_id];
     return `<div class="sched-item">
-      <div class="sched-info"><div class="sched-cron">${s.cron}</div><div class="sched-db">${db?db.name:'?'} → ${s.save_path||'default'}</div></div>
+      <div class="sched-info">
+        <div class="sched-cron">${s.cron}</div>
+        <div class="sched-human">${cronToHuman(s.cron)}</div>
+        <div class="sched-db">${db?db.name:'?'} → ${s.save_path||'default'}</div>
+      </div>
       <div class="toggle-row" onclick="toggleSched('${s.id}')" style="padding:0"><div class="toggle-sw ${s.enabled?'on':''}" id="sched-sw-${s.id}"></div></div>
       <button class="btn-icon" onclick="deleteSched('${s.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
     </div>`;
@@ -1077,11 +1213,28 @@ async function renderSchedules() {
 async function openAddSchedule() {
   await loadDBs();
   document.getElementById('sched-db-id').innerHTML = databases.map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
+  // Reset builder to defaults
+  schedMode = 'daily'; schedAdvanced = false;
+  document.querySelectorAll('.sched-preset').forEach(b => b.classList.remove('active'));
+  document.querySelector('.sched-preset[data-preset="daily"]').classList.add('active');
+  document.getElementById('sched-time-row').classList.remove('hidden');
+  document.getElementById('sched-weekday-row').classList.add('hidden');
+  document.getElementById('sched-hour').value = 2;
+  document.getElementById('sched-minute').value = 0;
+  const cronInput = document.getElementById('sched-cron');
+  cronInput.value = '0 2 * * *';
+  cronInput.setAttribute('readonly', '');
+  cronInput.style.background = 'var(--surface2)'; cronInput.style.color = 'var(--text2)'; cronInput.style.cursor = 'default';
+  document.getElementById('sched-adv-note').textContent = 'Generated automatically from the settings above';
+  document.getElementById('sched-adv-btn').textContent  = '✎ Edit manually';
+  document.getElementById('sched-save-path').value = '';
+  const firstWd = document.querySelector('input[name="sched-weekday"][value="1"]');
+  if (firstWd) firstWd.checked = true;
   document.getElementById('modal-sched').classList.add('open');
 }
 async function addSchedule() {
   const data = { db_id:v('sched-db-id'), cron:v('sched-cron'), save_path:v('sched-save-path') };
-  if (!data.cron) { toast('Enter cron expression','err'); return; }
+  if (!data.cron) { toast('Enter a cron expression','err'); return; }
   const r = await api('POST','/api/schedules',data);
   if (r.ok) { closeModal('modal-sched'); renderSchedules(); toast('Schedule added'); }
   else toast(r.message||'Error','err');
