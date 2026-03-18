@@ -22,6 +22,19 @@
   --shadow-md:0 4px 24px rgba(0,0,0,.10);
   --mono:'JetBrains Mono',monospace;--sans:'Inter',sans-serif;
 }
+/* Dark theme */
+[data-theme="dark"]{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--surface3:#2a2f45;
+  --border:#2e3350;--border2:#3d4460;
+  --accent:#5b8af5;--accent-bg:#1a2040;
+  --green:#22c98a;--green-bg:#0d2a1e;
+  --red:#f05060;--red-bg:#2a1018;
+  --yellow:#f0b030;--yellow-bg:#2a2008;
+  --orange:#f07040;--orange-bg:#2a1808;
+  --text:#e8eaf5;--text2:#a0a8c8;--muted:#606880;
+  --shadow:0 1px 3px rgba(0,0,0,.3),0 4px 16px rgba(0,0,0,.2);
+  --shadow-md:0 4px 24px rgba(0,0,0,.4);
+}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex;height:100vh;overflow:hidden}
 
@@ -214,7 +227,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
       <div class="logo-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
       </div>
-      <div><h1>DB Dump Manager</h1><span>v3.0</span></div>
+      <div><h1>DB Dump Manager</h1><span>v4.0</span></div>
+      <button class="btn-icon" id="theme-toggle" title="Toggle dark/light theme" onclick="toggleTheme()" style="margin-left:auto">
+        <svg id="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg id="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
     </div>
   </div>
   <nav>
@@ -253,6 +270,14 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
     <div class="nav-item" onclick="showPage('retention')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
       Retention
+    </div>
+    <div class="nav-item" onclick="showPage('storage')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      Cloud Storage
+    </div>
+    <div class="nav-item" onclick="showPage('audit')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Audit Log
     </div>
   </nav>
 </aside>
@@ -338,7 +363,37 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 
 <!-- History -->
 <div id="page-history" class="page">
-  <div class="page-header"><div class="page-title">Dump History</div></div>
+  <div class="page-header"><div class="page-title">Dump History</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn btn-ghost btn-sm" onclick="exportDBConfigs()" title="Export database configs as JSON">⬇ Export DBs</button>
+      <label class="btn btn-ghost btn-sm" title="Import database configs from JSON" style="cursor:pointer">⬆ Import DBs<input type="file" accept=".json" style="display:none" onchange="importDBConfigs(this)"></label>
+    </div>
+  </div>
+  <div class="card" style="padding:14px 18px;margin-bottom:12px">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div class="form-group" style="margin:0;flex:1;min-width:160px">
+        <label>Search</label>
+        <input id="hist-search" type="text" placeholder="filename or database…" oninput="renderHistory()">
+      </div>
+      <div class="form-group" style="margin:0;width:120px">
+        <label>Status</label>
+        <select id="hist-status" onchange="renderHistory()">
+          <option value="">All</option>
+          <option value="done">Done</option>
+          <option value="error">Error</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0;width:130px">
+        <label>From date</label>
+        <input id="hist-from" type="date" onchange="renderHistory()">
+      </div>
+      <div class="form-group" style="margin:0;width:130px">
+        <label>To date</label>
+        <input id="hist-to" type="date" onchange="renderHistory()">
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="clearHistoryFilters()">✕ Clear</button>
+    </div>
+  </div>
   <div class="card" style="padding:0;overflow:hidden">
     <table class="tbl">
       <thead><tr><th>Database</th><th>File</th><th>Size</th><th>Created</th><th>Status</th><th>Verify</th><th></th></tr></thead>
@@ -360,6 +415,25 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
       <div class="toggle-row" onclick="toggleBool('s-auto-verify')">
         <div class="toggle-sw" id="s-auto-verify-sw"></div>
         <div class="toggle-label">Auto-verify dump integrity after each download</div>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="saveSettings()">Save</button>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">Compression</div></div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Format</label>
+        <select id="s-comp-format">
+          <option value="none">None (no compression)</option>
+          <option value="gzip">gzip (.gz) — fast, widely supported</option>
+          <option value="bzip2">bzip2 (.bz2) — better ratio, slower</option>
+          <option value="zstd">zstd (.zst) — fastest + best ratio</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Compression Level (blank = default)</label>
+        <input id="s-comp-level" type="number" min="1" max="22" placeholder="default">
       </div>
     </div>
     <button class="btn btn-primary btn-sm" onclick="saveSettings()">Save</button>
@@ -459,6 +533,101 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
   <div id="retention-preview"></div>
 </div>
 
+<!-- Cloud Storage -->
+<div id="page-storage" class="page">
+  <div class="page-header"><div class="page-title">Cloud Storage</div></div>
+
+  <!-- S3 / MinIO -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">S3 / MinIO</div>
+      <div class="toggle-row" onclick="toggleBool('s3-enabled')" style="padding:0">
+        <div class="toggle-sw" id="s3-enabled-sw"></div><div class="toggle-label" style="margin-left:6px">Enable</div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Bucket Name *</label><input id="s3-bucket" type="text" placeholder="my-db-backups"></div>
+      <div class="form-group"><label>Region</label><input id="s3-region" type="text" placeholder="us-east-1"></div>
+    </div>
+    <div class="form-group"><label>Endpoint URL (MinIO / custom, leave blank for AWS)</label><input id="s3-endpoint" type="text" placeholder="http://minio:9000"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Access Key</label><input id="s3-access-key" type="text" placeholder="AKIAIOSFODNN7EXAMPLE"></div>
+      <div class="form-group"><label>Secret Key</label><input id="s3-secret-key" type="password" placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Key Prefix</label><input id="s3-prefix" type="text" placeholder="db-dumps/"></div>
+      <div class="form-group"><label>Keep Last N objects (0 = unlimited)</label><input id="s3-keep-n" type="number" value="50" min="0"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-primary btn-sm" onclick="saveStorage()">Save</button>
+      <button class="btn btn-ghost btn-sm" onclick="testS3()">Test Connection</button>
+      <button class="btn btn-ghost btn-sm" onclick="listS3()">List Backups</button>
+    </div>
+    <div id="s3-result" style="margin-top:10px"></div>
+  </div>
+
+  <!-- WebDAV -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">WebDAV (Nextcloud / ownCloud)</div>
+      <div class="toggle-row" onclick="toggleBool('wdav-enabled')" style="padding:0">
+        <div class="toggle-sw" id="wdav-enabled-sw"></div><div class="toggle-label" style="margin-left:6px">Enable</div>
+      </div>
+    </div>
+    <div class="form-group"><label>WebDAV URL *</label><input id="wdav-url" type="text" placeholder="https://cloud.example.com/remote.php/dav/files/user/"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Username</label><input id="wdav-user" type="text" placeholder="myuser"></div>
+      <div class="form-group"><label>Password</label><input id="wdav-pass" type="password" placeholder="••••••••"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Remote Directory</label><input id="wdav-root" type="text" placeholder="/db-dumps"></div>
+      <div class="form-group"><label>Keep Last N files (0 = unlimited)</label><input id="wdav-keep-n" type="number" value="30" min="0"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-primary btn-sm" onclick="saveStorage()">Save</button>
+      <button class="btn btn-ghost btn-sm" onclick="testWebDAV()">Test Connection</button>
+      <button class="btn btn-ghost btn-sm" onclick="listWebDAV()">List Files</button>
+    </div>
+    <div id="wdav-result" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<!-- Audit Log -->
+<div id="page-audit" class="page">
+  <div class="page-header">
+    <div class="page-title">Audit Log</div>
+    <button class="btn btn-danger btn-sm" onclick="purgeAuditLog()">Purge Old Entries</button>
+  </div>
+  <div class="card" style="padding:14px 18px;margin-bottom:12px">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div class="form-group" style="margin:0;flex:1;min-width:160px">
+        <label>Action filter</label>
+        <input id="audit-action" type="text" placeholder="dump, schedule, upload…" oninput="renderAuditLog()">
+      </div>
+      <div class="form-group" style="margin:0;width:140px">
+        <label>User</label>
+        <input id="audit-user" type="text" placeholder="system" oninput="renderAuditLog()">
+      </div>
+      <div class="form-group" style="margin:0;width:130px">
+        <label>From date</label>
+        <input id="audit-from" type="date" onchange="renderAuditLog()">
+      </div>
+      <div class="form-group" style="margin:0;width:130px">
+        <label>To date</label>
+        <input id="audit-to" type="date" onchange="renderAuditLog()">
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="clearAuditFilters()">✕ Clear</button>
+    </div>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <table class="tbl">
+      <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Resource</th><th>Status</th><th>Details</th></tr></thead>
+      <tbody id="audit-tbody"></tbody>
+    </table>
+  </div>
+  <div id="audit-pagination" style="display:flex;justify-content:center;gap:8px;margin-top:12px"></div>
+</div>
+
 </main><!-- /main -->
 
 <!-- ══ Add/Edit DB Modal ═══════════════════════════════ -->
@@ -521,6 +690,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
     <div class="form-group"><label>Compression (0–9)</label><input id="db-compress" type="number" min="0" max="9" value="0"></div>
     <div class="form-group"><label>Est. DB Size (MB)</label><input id="db-size" type="number" placeholder="500" value="500"></div>
   </div>
+  <div class="info-box" id="db-compress-hint" style="margin-top:-6px">Post-dump compression is configured globally in Settings → Compression.</div>
   <div class="form-row">
     <div class="form-group">
       <div class="toggle-row" onclick="toggleBool('db-no-owner')"><div class="toggle-sw" id="db-no-owner-sw"></div><div class="toggle-label">--no-owner</div></div>
@@ -625,6 +795,13 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
     <div id="sched-adv-note" style="font-size:11px;color:var(--muted);margin-top:4px">Generated automatically from the settings above</div>
   </div>
   <div class="form-group"><label>Save To (empty = default)</label><input id="sched-save-path" type="text" placeholder="./dumps"></div>
+  <hr class="section-sep">
+  <div class="section-label" style="margin-bottom:10px">Retry on Failure</div>
+  <div class="form-row">
+    <div class="form-group"><label>Max Retries (0 = no retry)</label><input id="sched-max-retries" type="number" min="0" max="10" value="0"></div>
+    <div class="form-group"><label>Base Wait (seconds)</label><input id="sched-retry-wait" type="number" min="10" value="60"></div>
+  </div>
+  <div class="info-box">Retries use exponential backoff: wait × 1, wait × 2, wait × 4, …</div>
   <div class="modal-footer">
     <button class="btn btn-ghost" onclick="closeModal('modal-sched')">Cancel</button>
     <button class="btn btn-primary" onclick="addSchedule()">Save</button>
@@ -650,6 +827,21 @@ let socket;
 try { socket = io(); } catch(e) { socket = { on() {}, emit() {} }; }
 let databases = [], schedules = [], history = [], dumpProgress = {}, bools = {};
 let chartTimeline = null, chartByDb = null;
+let auditOffset = 0; const AUDIT_PAGE_SIZE = 50;
+
+// ── Dark/Light theme ──────────────────────────────────────
+function applyTheme(dark) {
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : '');
+  document.getElementById('theme-icon-sun').style.display  = dark ? 'none' : '';
+  document.getElementById('theme-icon-moon').style.display = dark ? '' : 'none';
+}
+function toggleTheme() {
+  const dark = document.documentElement.getAttribute('data-theme') !== 'dark';
+  localStorage.setItem('theme', dark ? 'dark' : 'light');
+  applyTheme(dark);
+}
+// Apply saved theme on load
+(function(){ applyTheme(localStorage.getItem('theme') === 'dark'); })();
 
 // ── Toggles ─────────────────────────────────────────────
 function setToggle(key, val) { bools[key] = !!val; const el = document.getElementById(key+'-sw'); if(el) el.classList.toggle('on', !!val); }
@@ -669,6 +861,7 @@ function showPage(id) {
     dashboard: refreshDashboard, databases: renderDBs, dumps: renderDumps,
     schedules: renderSchedules, history: renderHistory,
     settings: loadSettings, notifications: loadNotifications, retention: loadRetention,
+    storage: loadStorage, audit: renderAuditLog,
   }[id] || (()=>{}))();
 }
 
@@ -1080,11 +1273,25 @@ function downloadDump(id) { window.location.href = `/api/dump/download/${id}`; }
 async function loadHistory() { history = await api('GET','/api/history'); }
 async function renderHistory() {
   await loadHistory();
+  const search = (document.getElementById('hist-search')?.value || '').toLowerCase();
+  const status = document.getElementById('hist-status')?.value || '';
+  const from   = document.getElementById('hist-from')?.value || '';
+  const to     = document.getElementById('hist-to')?.value || '';
+
+  let filtered = history.filter(h => {
+    if (search && !h.filename?.toLowerCase().includes(search) && !h.db_name?.toLowerCase().includes(search)) return false;
+    if (status && h.status !== status) return false;
+    if (from && h.created_at?.slice(0,10) < from) return false;
+    if (to   && h.created_at?.slice(0,10) > to)   return false;
+    return true;
+  });
+
   const tb = document.getElementById('history-tbody');
-  if (!history.length) { tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">No history yet.</td></tr>'; return; }
-  tb.innerHTML = history.map(h => {
-    const v = h.verify;
-    const vBadge = v ? `<span class="pill ${v.ok?'ok':'warn'}" title="${v.summary}">${v.ok?'✓ ok':'⚠'}</span>` : `<button class="btn btn-ghost btn-sm" onclick="runVerify('${h.dump_id}')">Verify</button>`;
+  if (!filtered.length) { tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">No history matching filters.</td></tr>'; return; }
+  tb.innerHTML = filtered.map(h => {
+    const vr = h.verify;
+    const vBadge = vr ? `<span class="pill ${vr.ok?'ok':'warn'}" title="${vr.summary}">${vr.ok?'✓ ok':'⚠'}</span>` : `<button class="btn btn-ghost btn-sm" onclick="runVerify('${h.dump_id}')">Verify</button>`;
+    const cloudLink = h.cloud_url ? `<a href="${h.cloud_url}" target="_blank" class="btn btn-ghost btn-sm" title="S3/WebDAV link">☁</a>` : '';
     return `
     <tr>
       <td>${h.db_name||'—'}</td>
@@ -1098,10 +1305,17 @@ async function renderHistory() {
       <td>${vBadge}</td>
       <td style="display:flex;gap:5px;padding:7px 12px">
         ${h.status==='done'?`<button class="btn btn-success btn-sm" onclick="window.location.href='/api/history/download/${h.filename}'">⬇</button>`:''}
+        ${cloudLink}
         <button class="btn btn-danger btn-sm" onclick="deleteHistory('${h.dump_id}')">✕</button>
       </td>
     </tr>`;
   }).join('');
+}
+
+function clearHistoryFilters() {
+  ['hist-search','hist-from','hist-to'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  const sel = document.getElementById('hist-status'); if(sel) sel.value='';
+  renderHistory();
 }
 
 async function runVerify(dumpId) {
@@ -1233,7 +1447,11 @@ async function openAddSchedule() {
   document.getElementById('modal-sched').classList.add('open');
 }
 async function addSchedule() {
-  const data = { db_id:v('sched-db-id'), cron:v('sched-cron'), save_path:v('sched-save-path') };
+  const data = {
+    db_id: v('sched-db-id'), cron: v('sched-cron'), save_path: v('sched-save-path'),
+    max_retries: parseInt(v('sched-max-retries')) || 0,
+    retry_wait: parseFloat(v('sched-retry-wait')) || 60,
+  };
   if (!data.cron) { toast('Enter a cron expression','err'); return; }
   const r = await api('POST','/api/schedules',data);
   if (r.ok) { closeModal('modal-sched'); renderSchedules(); toast('Schedule added'); }
@@ -1251,10 +1469,25 @@ async function loadSettings() {
   document.getElementById('s-save-path').value   = s.default_save_path||'./dumps';
   document.getElementById('s-max-history').value = s.max_history||100;
   setToggle('s-auto-verify', s.auto_verify);
+  const comp = s.compression || {};
+  const compFmt = document.getElementById('s-comp-format');
+  if (compFmt) compFmt.value = comp.format || 'none';
+  const compLvl = document.getElementById('s-comp-level');
+  if (compLvl) compLvl.value = comp.level != null ? comp.level : '';
 }
 async function saveSettings() {
   const existing = await api('GET','/api/settings');
-  const data = { ...existing, default_save_path: v('s-save-path'), max_history: parseInt(v('s-max-history'))||100, auto_verify: !!bools['s-auto-verify'] };
+  const compLevel = document.getElementById('s-comp-level')?.value;
+  const data = {
+    ...existing,
+    default_save_path: v('s-save-path'),
+    max_history: parseInt(v('s-max-history'))||100,
+    auto_verify: !!bools['s-auto-verify'],
+    compression: {
+      format: document.getElementById('s-comp-format')?.value || 'none',
+      level: compLevel ? parseInt(compLevel) : null,
+    },
+  };
   await api('POST','/api/settings',data); toast('Settings saved');
 }
 async function checkDiskCustom() {
@@ -1334,6 +1567,179 @@ async function applyRetention() {
   toast(`Deleted ${r.count} dump(s)`, r.ok?'ok':'err');
   renderHistory();
   document.getElementById('retention-preview').innerHTML='';
+}
+
+// ── Cloud Storage ─────────────────────────────────────────
+async function loadStorage() {
+  const s = await api('GET','/api/settings');
+  const st = s.storage || {};
+  const s3 = st.s3 || {};
+  setToggle('s3-enabled', s3.enabled);
+  document.getElementById('s3-bucket').value     = s3.bucket||'';
+  document.getElementById('s3-region').value     = s3.region||'';
+  document.getElementById('s3-endpoint').value   = s3.endpoint_url||'';
+  document.getElementById('s3-access-key').value = s3.access_key||'';
+  document.getElementById('s3-secret-key').value = s3.secret_key||'';
+  document.getElementById('s3-prefix').value     = s3.prefix||'db-dumps/';
+  document.getElementById('s3-keep-n').value     = s3.keep_last_n||50;
+  const wd = st.webdav || {};
+  setToggle('wdav-enabled', wd.enabled);
+  document.getElementById('wdav-url').value    = wd.url||'';
+  document.getElementById('wdav-user').value   = wd.username||'';
+  document.getElementById('wdav-pass').value   = wd.password||'';
+  document.getElementById('wdav-root').value   = wd.root_dir||'/db-dumps';
+  document.getElementById('wdav-keep-n').value = wd.keep_last_n||30;
+}
+
+async function saveStorage() {
+  const existing = await api('GET','/api/settings');
+  existing.storage = {
+    s3: {
+      enabled:      !!bools['s3-enabled'],
+      bucket:       v('s3-bucket'),
+      region:       v('s3-region'),
+      endpoint_url: v('s3-endpoint'),
+      access_key:   v('s3-access-key'),
+      secret_key:   v('s3-secret-key'),
+      prefix:       v('s3-prefix'),
+      keep_last_n:  parseInt(v('s3-keep-n'))||0,
+    },
+    webdav: {
+      enabled:    !!bools['wdav-enabled'],
+      url:        v('wdav-url'),
+      username:   v('wdav-user'),
+      password:   v('wdav-pass'),
+      root_dir:   v('wdav-root'),
+      keep_last_n: parseInt(v('wdav-keep-n'))||0,
+    },
+  };
+  await api('POST','/api/settings', existing); toast('Storage settings saved');
+}
+
+async function testS3() {
+  toast('Testing S3…'); await saveStorage();
+  const r = await api('POST','/api/storage/s3/test');
+  document.getElementById('s3-result').innerHTML =
+    `<div style="color:${r.ok?'var(--green)':'var(--red)'}">${r.ok?'✓':'✗'} ${r.message}</div>`;
+  toast(r.message, r.ok?'ok':'err');
+}
+
+async function listS3() {
+  const objs = await api('GET','/api/storage/s3/list');
+  const el = document.getElementById('s3-result');
+  if (!objs.length) { el.innerHTML='<div style="color:var(--muted)">No objects found.</div>'; return; }
+  el.innerHTML = `<table class="tbl" style="margin-top:8px">
+    <thead><tr><th>Key</th><th>Size</th><th>Last Modified</th><th></th></tr></thead>
+    <tbody>${objs.map(o=>`<tr>
+      <td class="mono" style="font-size:11px">${o.key}</td>
+      <td class="mono">${fmtBytes(o.size)}</td>
+      <td class="mono">${o.last_modified.slice(0,19).replace('T',' ')}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteS3Object('${o.key}')">✕</button></td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+async function deleteS3Object(key) {
+  if (!confirm(`Delete s3://${key}?`)) return;
+  const r = await api('POST','/api/storage/s3/delete',{key});
+  toast(r.ok?'Deleted':'Error', r.ok?'ok':'err');
+  listS3();
+}
+
+async function testWebDAV() {
+  toast('Testing WebDAV…'); await saveStorage();
+  const r = await api('POST','/api/storage/webdav/test');
+  document.getElementById('wdav-result').innerHTML =
+    `<div style="color:${r.ok?'var(--green)':'var(--red)'}">${r.ok?'✓':'✗'} ${r.message}</div>`;
+  toast(r.message, r.ok?'ok':'err');
+}
+
+async function listWebDAV() {
+  const files = await api('GET','/api/storage/webdav/list');
+  const el = document.getElementById('wdav-result');
+  if (!files.length) { el.innerHTML='<div style="color:var(--muted)">No files found.</div>'; return; }
+  el.innerHTML = `<table class="tbl" style="margin-top:8px">
+    <thead><tr><th>Name</th><th>Size</th><th>Modified</th></tr></thead>
+    <tbody>${files.map(f=>`<tr>
+      <td class="mono">${f.name}</td>
+      <td class="mono">${fmtBytes(f.size)}</td>
+      <td class="mono">${f.modified||'—'}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+// ── Audit Log ─────────────────────────────────────────────
+async function renderAuditLog(offset) {
+  if (offset !== undefined) auditOffset = offset;
+  const action = (document.getElementById('audit-action')?.value || '').trim();
+  const user   = (document.getElementById('audit-user')?.value || '').trim();
+  const from   = document.getElementById('audit-from')?.value || '';
+  const to     = document.getElementById('audit-to')?.value || '';
+  let url = `/api/audit?limit=${AUDIT_PAGE_SIZE}&offset=${auditOffset}`;
+  if (action) url += `&action=${encodeURIComponent(action)}`;
+  if (user)   url += `&user=${encodeURIComponent(user)}`;
+  if (from)   url += `&since=${encodeURIComponent(from)}`;
+  if (to)     url += `&until=${encodeURIComponent(to+'T23:59:59')}`;
+  const data = await api('GET', url);
+  const logs = data.logs || [];
+  const total = data.total || 0;
+
+  const tb = document.getElementById('audit-tbody');
+  if (!logs.length) { tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">No audit entries found.</td></tr>'; }
+  else {
+    tb.innerHTML = logs.map(l => `<tr>
+      <td class="mono" style="white-space:nowrap">${(l.ts||'').replace('T',' ')}</td>
+      <td>${l.user||'—'}</td>
+      <td><span class="format-badge">${l.action||''}</span></td>
+      <td class="mono" style="font-size:11px">${l.resource||'—'}</td>
+      <td><span class="pill ${l.status==='ok'?'done':'error'}">${l.status||''}</span></td>
+      <td style="font-size:11px;color:var(--muted)">${l.details||''}</td>
+    </tr>`).join('');
+  }
+
+  const pages = Math.ceil(total / AUDIT_PAGE_SIZE);
+  const cur   = Math.floor(auditOffset / AUDIT_PAGE_SIZE);
+  const pg    = document.getElementById('audit-pagination');
+  if (pages <= 1) { pg.innerHTML = ''; return; }
+  pg.innerHTML = Array.from({length: pages}, (_,i) =>
+    `<button class="btn btn-${i===cur?'primary':'ghost'} btn-sm" onclick="renderAuditLog(${i*AUDIT_PAGE_SIZE})">${i+1}</button>`
+  ).join('');
+}
+
+function clearAuditFilters() {
+  ['audit-action','audit-user','audit-from','audit-to'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  auditOffset = 0; renderAuditLog(0);
+}
+
+async function purgeAuditLog() {
+  const days = parseInt(prompt('Delete entries older than how many days?', '90'));
+  if (!days || days < 1) return;
+  const r = await api('POST','/api/audit/purge',{keep_days: days});
+  toast(`Deleted ${r.deleted} entries`, r.ok?'ok':'err');
+  renderAuditLog(0);
+}
+
+// ── Export / Import DB Configs ────────────────────────────
+async function exportDBConfigs() {
+  const r = await fetch('/api/databases/export');
+  const data = await r.json();
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `db_configs_${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(url);
+  toast('Exported ' + data.length + ' database configs');
+}
+
+async function importDBConfigs(input) {
+  const file = input.files[0]; if (!file) return;
+  const text = await file.text();
+  let data;
+  try { data = JSON.parse(text); } catch(e) { toast('Invalid JSON file','err'); return; }
+  const r = await api('POST','/api/databases/import', data);
+  input.value = '';
+  if (r.ok) { toast('Imported ' + r.added + ' database(s)'); renderDBs(); }
+  else toast(r.message||'Import failed','err');
 }
 
 // ── Modal helpers ─────────────────────────────────────────

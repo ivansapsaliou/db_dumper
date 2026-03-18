@@ -8,3 +8,8 @@ cx_Oracle>=8.3.0
 cryptography>=42.0.0
 eventlet>=0.35.2
 psutil>=5.9.8
+# Advanced features (optional — install as needed)
+boto3>=1.34.0
+zstandard>=0.22.0
+webdavclient3>=3.14.0
+pytest>=9.0.0

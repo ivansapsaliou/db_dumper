@@ -8,3 +8,12 @@ dist/
 build/
 .venv/
 venv/
+# Sensitive runtime files — never commit
+.secret.key
+config.json
+audit.db
+users.json
+# Dump output
+dumps/
+# pytest cache
+.pytest_cache/
