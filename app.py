@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()
+
 import io
 import os
 import json
@@ -82,9 +85,9 @@ def is_cancelled(dump_id: str) -> bool:
 def _run_dump_task(db_config, dump_id, save_path):
     """Runs inside a socketio background task (eventlet greenlet)."""
     cancel_flags[dump_id] = False
-    db_name = db_config.get('database', 'dump')
 
     try:
+        db_name = db_config.get('database', 'dump')
         emit_progress(dump_id, {
             'status':     'running',
             'percent':    0,
