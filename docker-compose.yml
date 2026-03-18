@@ -1,0 +1,94 @@
+version: "3.9"
+
+services:
+  # ── DB Dump Manager ──────────────────────────────────────────────────────────
+  app:
+    build: .
+    container_name: db_dumper_app
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./dumps:/app/dumps        # persist dump files
+      - ./config.json:/app/config.json  # persist settings
+      - ./audit.db:/app/audit.db  # persist audit log
+      - ./.secret.key:/app/.secret.key  # persist encryption key
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - postgres
+      - mysql
+      - minio
+    restart: unless-stopped
+    networks:
+      - db_dumper_net
+
+  # ── PostgreSQL (test database) ───────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: db_dumper_postgres
+    environment:
+      POSTGRES_DB: testdb
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpass
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - db_dumper_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testuser -d testdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── MySQL (test database) ────────────────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: db_dumper_mysql
+    environment:
+      MYSQL_DATABASE: testdb
+      MYSQL_USER: testuser
+      MYSQL_PASSWORD: testpass
+      MYSQL_ROOT_PASSWORD: rootpass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - db_dumper_net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "testuser", "--password=testpass"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── MinIO (S3-compatible object storage) ─────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: db_dumper_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # MinIO Console
+    volumes:
+      - minio_data:/data
+    networks:
+      - db_dumper_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+networks:
+  db_dumper_net:
+    driver: bridge
+
+volumes:
+  pg_data:
+  mysql_data:
+  minio_data:

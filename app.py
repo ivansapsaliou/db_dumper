@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import uuid
 import shutil
 import logging
@@ -17,6 +18,10 @@ from crypto_manager import get_crypto
 from notifier import NotificationManager
 from retention import RetentionManager
 from verifier import DumpVerifier
+from compression import CompressionManager
+from security import get_audit_logger, get_rbac_manager
+from s3_integration import S3Integration
+from webdav_integration import WebDAVIntegration
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -29,6 +34,9 @@ config_manager = ConfigManager('config.json')
 crypto         = get_crypto()
 retention_mgr  = RetentionManager(config_manager)
 verifier       = DumpVerifier()
+compressor     = CompressionManager()
+audit_logger   = get_audit_logger()
+rbac_manager   = get_rbac_manager()
 
 scheduler = BackgroundScheduler()
 scheduler.start()
@@ -133,6 +141,27 @@ def _run_dump_task(db_config, dump_id, save_path):
             actual_filename = os.path.basename(actual_filepath)
             size = os.path.getsize(actual_filepath) if os.path.exists(actual_filepath) else 0
 
+            # ── Compression on-the-fly ────────────────────────────────────────
+            comp_cfg = settings.get('compression', {})
+            comp_fmt = comp_cfg.get('format', 'none')
+            if comp_fmt and comp_fmt != 'none' and not os.path.isdir(actual_filepath):
+                try:
+                    emit_progress(dump_id, {
+                        'status': 'running', 'percent': 100,
+                        'message': f'Compressing ({comp_fmt})…'
+                    })
+                    compressed_path = compressor.compress_file(
+                        actual_filepath, fmt=comp_fmt,
+                        level=comp_cfg.get('level'),
+                        remove_src=True
+                    )
+                    actual_filepath = compressed_path
+                    actual_filename = os.path.basename(actual_filepath)
+                    size = os.path.getsize(actual_filepath) if os.path.exists(actual_filepath) else 0
+                    logger.info(f'Dump compressed: {actual_filename}')
+                except Exception as e:
+                    logger.warning(f'Compression failed (continuing without): {e}')
+
             # Verification
             verify_result = None
             if settings.get('auto_verify', False):
@@ -142,6 +171,41 @@ def _run_dump_task(db_config, dump_id, save_path):
                 })
                 verify_result = verifier.verify(actual_filepath,
                                                 db_type=db_config.get('type', 'postgresql'))
+
+            # ── Cloud upload ──────────────────────────────────────────────────
+            cloud_url = None
+            storage_cfg = settings.get('storage', {})
+
+            s3_cfg = storage_cfg.get('s3', {})
+            if s3_cfg.get('enabled') and os.path.isfile(actual_filepath):
+                try:
+                    emit_progress(dump_id, {'status': 'running', 'percent': 100, 'message': 'Uploading to S3…'})
+                    s3 = S3Integration(s3_cfg)
+                    res = s3.upload_file(actual_filepath)
+                    if res['ok']:
+                        cloud_url = res.get('url', '')
+                        s3.apply_retention()
+                        audit_logger.log('s3_upload', resource=actual_filename,
+                                         status='ok', details=res.get('key'))
+                    else:
+                        logger.warning(f'S3 upload failed: {res["message"]}')
+                        audit_logger.log('s3_upload', resource=actual_filename,
+                                         status='error', details=res['message'])
+                except Exception as e:
+                    logger.warning(f'S3 upload exception: {e}')
+
+            webdav_cfg = storage_cfg.get('webdav', {})
+            if webdav_cfg.get('enabled') and os.path.isfile(actual_filepath):
+                try:
+                    emit_progress(dump_id, {'status': 'running', 'percent': 100, 'message': 'Uploading to WebDAV…'})
+                    wdav = WebDAVIntegration(webdav_cfg)
+                    res = wdav.upload_file(actual_filepath)
+                    if res['ok']:
+                        audit_logger.log('webdav_upload', resource=actual_filename, status='ok')
+                    else:
+                        logger.warning(f'WebDAV upload failed: {res["message"]}')
+                except Exception as e:
+                    logger.warning(f'WebDAV upload exception: {e}')
 
             history_item = {
                 'dump_id':    dump_id,
@@ -153,6 +217,7 @@ def _run_dump_task(db_config, dump_id, save_path):
                 'status':     'done',
                 'created_at': datetime.now().isoformat(),
                 'verify':     verify_result,
+                'cloud_url':  cloud_url,
             }
             config_manager.add_history(history_item)
 
@@ -165,6 +230,7 @@ def _run_dump_task(db_config, dump_id, save_path):
                 'size':        size,
                 'finished_at': datetime.now().isoformat(),
                 'verify':      verify_result,
+                'cloud_url':   cloud_url,
             })
 
             # Notifications
@@ -173,7 +239,12 @@ def _run_dump_task(db_config, dump_id, save_path):
                 'filename':    actual_filename,
                 'size':        size,
                 'finished_at': datetime.now().isoformat(),
+                'cloud_url':   cloud_url,
             })
+
+            # Audit log
+            audit_logger.log('dump_success', resource=actual_filename,
+                             details=f'size={size}, db={db_name}')
 
             # Retention policy
             retention_mgr.apply(db_config.get('id'))
@@ -191,6 +262,7 @@ def _run_dump_task(db_config, dump_id, save_path):
                 'message':     last_msg,
                 'finished_at': datetime.now().isoformat(),
             })
+            audit_logger.log('dump_error', resource=db_name, status='error', details=last_msg)
 
     except Exception as e:
         logger.exception('_run_dump_task')
@@ -206,6 +278,45 @@ def _run_dump_task(db_config, dump_id, save_path):
 
 def run_dump(db_config, dump_id, save_path):
     socketio.start_background_task(_run_dump_task, db_config, dump_id, save_path)
+
+
+def _run_scheduled_dump_with_retry(db_config, save_path, max_retries: int = 3,
+                                   base_wait: float = 60.0):
+    """
+    Scheduled dump with exponential-backoff retry.
+    Retries up to max_retries times on failure.
+    Wait times: base_wait, 2*base_wait, 4*base_wait, ...
+    """
+    import eventlet
+    last_error = None
+    for attempt in range(max_retries + 1):
+        dump_id = str(uuid.uuid4())
+        cancel_flags[dump_id] = False
+        db_name = db_config.get('database', '?')
+
+        if attempt > 0:
+            wait = base_wait * (2 ** (attempt - 1))
+            logger.info(f'Retry {attempt}/{max_retries} for {db_name} — waiting {wait}s')
+            eventlet.sleep(wait)
+
+        _run_dump_task(db_config, dump_id, save_path)
+
+        final = dump_progress.get(dump_id, {})
+        if final.get('status') == 'done':
+            return  # success
+        last_error = final.get('message', 'Unknown error')
+        logger.warning(f'Scheduled dump attempt {attempt+1} failed: {last_error}')
+
+    # All retries exhausted
+    settings = config_manager.get_settings()
+    notifier = NotificationManager(settings)
+    notifier.notify('error', {
+        'db_name':     db_name,
+        'message':     f'All {max_retries+1} attempts failed. Last error: {last_error}',
+        'finished_at': datetime.now().isoformat(),
+    })
+    audit_logger.log('dump_retry_exhausted', resource=db_name, status='error',
+                     details=f'retries={max_retries}, last_error={last_error}')
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -459,15 +570,24 @@ def add_schedule():
     db        = config_manager.get_database(data['db_id'])
     save_path = (data.get('save_path') or
                  config_manager.get_settings().get('default_save_path', './dumps'))
+    max_retries = int(data.get('max_retries', 0))
+    base_wait   = float(data.get('retry_wait', 60))
 
     def scheduled_dump():
-        dump_id = str(uuid.uuid4())
-        socketio.start_background_task(_run_dump_task, db, dump_id, save_path)
+        if max_retries > 0:
+            socketio.start_background_task(
+                _run_scheduled_dump_with_retry, db, save_path, max_retries, base_wait
+            )
+        else:
+            dump_id = str(uuid.uuid4())
+            socketio.start_background_task(_run_dump_task, db, dump_id, save_path)
 
     job = scheduler.add_job(scheduled_dump, CronTrigger.from_crontab(data['cron']),
                             id=sched_id, replace_existing=True)
     active_jobs[sched_id] = job
     config_manager.add_schedule(data)
+    audit_logger.log('schedule_created', resource=sched_id,
+                     details=f'cron={data["cron"]}, db={db.get("name") if db else "?"}')
     return jsonify({'ok': True, 'id': sched_id})
 
 
@@ -581,16 +701,25 @@ def restore_schedules():
         db = config_manager.get_database(s['db_id'])
         if not db:
             continue
-        save_path = (s.get('save_path') or
-                     config_manager.get_settings().get('default_save_path', './dumps'))
+        save_path   = (s.get('save_path') or
+                       config_manager.get_settings().get('default_save_path', './dumps'))
+        max_retries = int(s.get('max_retries', 0))
+        base_wait   = float(s.get('retry_wait', 60))
 
-        def make_job(db_cfg, sp):
+        def make_job(db_cfg, sp, mr, bw):
             def fn():
-                socketio.start_background_task(_run_dump_task, db_cfg, str(uuid.uuid4()), sp)
+                if mr > 0:
+                    socketio.start_background_task(
+                        _run_scheduled_dump_with_retry, db_cfg, sp, mr, bw
+                    )
+                else:
+                    socketio.start_background_task(
+                        _run_dump_task, db_cfg, str(uuid.uuid4()), sp
+                    )
             return fn
 
         try:
-            job = scheduler.add_job(make_job(db, save_path),
+            job = scheduler.add_job(make_job(db, save_path, max_retries, base_wait),
                                     CronTrigger.from_crontab(s['cron']),
                                     id=s['id'], replace_existing=True)
             active_jobs[s['id']] = job
@@ -604,3 +733,111 @@ if __name__ == '__main__':
     print(f'   Encryption: {"enabled ✓" if crypto.is_available() else "disabled (install cryptography)"}')
     socketio.run(app, host='0.0.0.0', port=5000, debug=False)
     #socketio.run(app, host='127.0.0.1', port=5000, debug=False)
+
+# ── Audit Log ─────────────────────────────────────────────────────────────────
+
+@app.route('/api/audit', methods=['GET'])
+def get_audit_logs():
+    limit  = int(request.args.get('limit', 100))
+    offset = int(request.args.get('offset', 0))
+    user   = request.args.get('user') or None
+    action = request.args.get('action') or None
+    since  = request.args.get('since') or None
+    until  = request.args.get('until') or None
+    logs   = audit_logger.get_logs(limit=limit, offset=offset,
+                                   user=user, action=action, since=since, until=until)
+    total  = audit_logger.get_total(user=user, action=action, since=since, until=until)
+    return jsonify({'logs': logs, 'total': total})
+
+
+@app.route('/api/audit/purge', methods=['POST'])
+def purge_audit_logs():
+    keep_days = int((request.json or {}).get('keep_days', 90))
+    deleted   = audit_logger.purge_old(keep_days=keep_days)
+    return jsonify({'ok': True, 'deleted': deleted})
+
+
+# ── Storage (S3 / WebDAV) ─────────────────────────────────────────────────────
+
+@app.route('/api/storage/s3/test', methods=['POST'])
+def test_s3():
+    settings = config_manager.get_settings()
+    s3_cfg = settings.get('storage', {}).get('s3', {})
+    s3 = S3Integration(s3_cfg)
+    ok, msg = s3.test_connection()
+    return jsonify({'ok': ok, 'message': msg})
+
+
+@app.route('/api/storage/s3/list', methods=['GET'])
+def list_s3():
+    settings = config_manager.get_settings()
+    s3_cfg = settings.get('storage', {}).get('s3', {}  )
+    s3 = S3Integration(s3_cfg)
+    objects = s3.list_objects()
+    return jsonify(objects)
+
+
+@app.route('/api/storage/s3/delete', methods=['POST'])
+def delete_s3_object():
+    key = (request.json or {}).get('key', '')
+    if not key:
+        return jsonify({'ok': False, 'message': 'key required'}), 400
+    settings = config_manager.get_settings()
+    s3_cfg = settings.get('storage', {}).get('s3', {})
+    s3 = S3Integration(s3_cfg)
+    ok = s3.delete_object(key)
+    return jsonify({'ok': ok})
+
+
+@app.route('/api/storage/webdav/test', methods=['POST'])
+def test_webdav():
+    settings = config_manager.get_settings()
+    wdav_cfg = settings.get('storage', {}).get('webdav', {})
+    wdav = WebDAVIntegration(wdav_cfg)
+    ok, msg = wdav.test_connection()
+    return jsonify({'ok': ok, 'message': msg})
+
+
+@app.route('/api/storage/webdav/list', methods=['GET'])
+def list_webdav():
+    settings = config_manager.get_settings()
+    wdav_cfg = settings.get('storage', {}).get('webdav', {})
+    wdav = WebDAVIntegration(wdav_cfg)
+    files = wdav.list_files()
+    return jsonify(files)
+
+
+# ── Export / Import database configurations ───────────────────────────────────
+
+@app.route('/api/databases/export', methods=['GET'])
+def export_databases():
+    dbs = config_manager.get_databases()
+    decrypted = [crypto.decrypt_db_config(db) for db in dbs]
+    return jsonify(decrypted)
+
+
+@app.route('/api/databases/import', methods=['POST'])
+def import_databases():
+    incoming = request.json
+    if not isinstance(incoming, list):
+        return jsonify({'ok': False, 'message': 'Expected a JSON array'}), 400
+    added = 0
+    for db in incoming:
+        if not isinstance(db, dict):
+            continue
+        db['id'] = str(uuid.uuid4())
+        encrypted = crypto.encrypt_db_config(db)
+        config_manager.add_database(encrypted)
+        added += 1
+    audit_logger.log('databases_imported', details=f'count={added}')
+    return jsonify({'ok': True, 'added': added})
+
+
+# ── Compression formats ───────────────────────────────────────────────────────
+
+@app.route('/api/compression/formats', methods=['GET'])
+def list_compression_formats():
+    from compression import SUPPORTED_FORMATS, EXTENSIONS
+    formats = [{'id': fmt, 'ext': EXTENSIONS[fmt]} for fmt in SUPPORTED_FORMATS]
+    formats.insert(0, {'id': 'none', 'ext': ''})
+    return jsonify(formats)
