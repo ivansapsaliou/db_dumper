@@ -742,7 +742,7 @@ async function refreshStats() {
         },
         {
           label: 'Avg → Max',
-          data: dbData.map(d => [MB(d.count > 0 ? d.total_size / d.count : d.max_size), MB(d.max_size)]),
+          data: dbData.map(d => [MB(d.count > 0 ? d.total_size / d.count : d.min_size), MB(d.max_size)]),
           backgroundColor: 'rgba(208,138,0,.55)',
           borderColor: '#d08a00', borderWidth: 1,
           borderSkipped: false, order: 2,
@@ -1130,13 +1130,19 @@ function cronToHuman(cron) {
   const p = (cron || '').trim().split(/\s+/);
   if (p.length !== 5) return cron;
   const [mn, hr, , , wd] = p;
+  const toInt = (s, def = 0) => { const n = parseInt(s); return isNaN(n) ? def : n; };
   const pad = n => String(n).padStart(2, '0');
-  if (hr === '*') return mn === '0' || mn === '*' ? 'Every hour' : `Every hour at :${pad(mn)}`;
-  if (hr.startsWith('*/')) return `Every ${hr.slice(2)}h at :${pad(mn)}`;
-  const time = `${pad(hr)}:${pad(mn)}`;
+  if (hr === '*') {
+    if (mn === '*') return 'Every hour';
+    const m = toInt(mn);
+    return m === 0 ? 'Every hour' : `Every hour at :${pad(m)}`;
+  }
+  if (hr.startsWith('*/')) return `Every ${hr.slice(2)}h at :${pad(toInt(mn))}`;
+  const time = `${pad(toInt(hr))}:${pad(toInt(mn))}`;
   if (wd === '*') return `Daily at ${time}`;
   const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  return `Every ${days[parseInt(wd)] || wd} at ${time}`;
+  const dayIdx = toInt(wd, -1);
+  return `Every ${(dayIdx >= 0 && dayIdx <= 6) ? days[dayIdx] : wd} at ${time}`;
 }
 
 function updateSchedCron() {
@@ -1228,7 +1234,7 @@ async function openAddSchedule() {
 }
 async function addSchedule() {
   const data = { db_id:v('sched-db-id'), cron:v('sched-cron'), save_path:v('sched-save-path') };
-  if (!data.cron) { toast('Schedule expression required','err'); return; }
+  if (!data.cron) { toast('Enter a cron expression','err'); return; }
   const r = await api('POST','/api/schedules',data);
   if (r.ok) { closeModal('modal-sched'); renderSchedules(); toast('Schedule added'); }
   else toast(r.message||'Error','err');
