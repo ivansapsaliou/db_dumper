@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DB Dump Manager — Schedule Calendar</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f0f2f7;--surface:#fff;--surface2:#f5f7fb;--surface3:#e8ecf4;
+  --border:#dde2ee;
+  --accent:#3b6ef5;--accent-bg:#eff3ff;
+  --green:#0ea271;--green-bg:#edfaf5;
+  --red:#e0394a;--red-bg:#fef0f1;
+  --text:#1a2035;--text2:#4a5578;--muted:#8892aa;
+  --radius:10px;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.04);
+  --mono:'JetBrains Mono',monospace;--sans:'Inter',sans-serif;
+}
+[data-theme="dark"]{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--surface3:#2a2f45;
+  --border:#2e3350;
+  --accent:#5b8af5;--accent-bg:#1a2040;
+  --green:#22c98a;--green-bg:#0d2a1e;
+  --text:#e8eaf5;--text2:#a0a8c8;--muted:#606880;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;gap:14px}
+.topbar a{text-decoration:none;color:var(--text2);font-size:13px;font-weight:500}
+.topbar a:hover{color:var(--accent)}
+.topbar h1{font-size:15px;font-weight:700}
+.topbar .sep{color:var(--muted)}
+.main{max-width:1200px;margin:0 auto;padding:28px 24px}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:10px}
+.page-title{font-size:18px;font-weight:700}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);margin-bottom:14px}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.btn{display:inline-flex;align-items:center;gap:6px;border:none;cursor:pointer;padding:7px 14px;border-radius:7px;font-size:12px;font-weight:600;font-family:var(--sans);transition:all .12s}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{filter:brightness(1.1)}
+.btn-ghost{background:var(--surface2);color:var(--text2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm{padding:5px 9px;font-size:11px}
+/* Calendar */
+.cal-nav{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.cal-month-label{font-size:15px;font-weight:700;min-width:160px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-day-header{text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:6px 0}
+.cal-cell{min-height:76px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:5px 6px;position:relative}
+.cal-cell.today{border-color:var(--accent);background:var(--accent-bg)}
+.cal-cell.other-month{opacity:.4}
+.cal-date{font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px}
+.cal-date.today-num{color:var(--accent);font-weight:700}
+.cal-event{font-size:10px;padding:2px 5px;border-radius:4px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default;background:var(--accent-bg);color:var(--accent);border:1px solid #c7d8fe}
+.cal-event:hover{opacity:.8}
+.cal-more{font-size:10px;color:var(--muted);cursor:pointer}
+/* List view */
+.sched-list-item{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:10px 13px;margin-bottom:6px;display:flex;align-items:flex-start;gap:10px}
+.sched-time{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);min-width:100px}
+.sched-db{font-size:12px;font-weight:500}
+.sched-cron{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px}
+#toast{position:fixed;bottom:20px;right:20px;background:var(--text);color:#fff;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:500;transform:translateY(60px);opacity:0;transition:all .22s;z-index:999}
+#toast.show{transform:translateY(0);opacity:1}
+@media(max-width:700px){.cal-cell{min-height:50px}.cal-event{display:none}.main{padding:16px 12px}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/">&#8592; Dashboard</a>
+  <span class="sep">|</span>
+  <h1>Schedule Calendar</h1>
+</div>
+
+<div class="main">
+  <div class="page-header">
+    <div class="page-title">&#128197; Schedule Calendar</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost btn-sm" onclick="changeView('calendar')">Calendar</button>
+      <button class="btn btn-ghost btn-sm" onclick="changeView('list')">List</button>
+      <button class="btn btn-primary btn-sm" onclick="loadCalendar()">&#8635; Refresh</button>
+    </div>
+  </div>
+
+  <!-- Calendar navigation -->
+  <div class="card" id="calendar-view">
+    <div class="cal-nav">
+      <button class="btn btn-ghost btn-sm" onclick="prevMonth()">&#8592;</button>
+      <div class="cal-month-label" id="month-label"></div>
+      <button class="btn btn-ghost btn-sm" onclick="nextMonth()">&#8594;</button>
+    </div>
+    <div class="cal-grid" id="cal-headers"></div>
+    <div class="cal-grid" id="cal-cells" style="margin-top:4px"></div>
+  </div>
+
+  <!-- List view -->
+  <div class="card" id="list-view" style="display:none">
+    <div class="card-header"><span class="card-title">Upcoming scheduled runs (next 30 days)</span></div>
+    <div id="schedule-list"></div>
+  </div>
+
+  <!-- Legend -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Active schedules</span></div>
+    <div id="schedules-legend"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let calData = [];
+let currentYear  = new Date().getFullYear();
+let currentMonth = new Date().getMonth();
+let currentView  = 'calendar';
+
+const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTHS = ['January','February','March','April','May','June',
+                'July','August','September','October','November','December'];
+
+// Color palette for different databases
+const COLORS = [
+  {bg:'#eff3ff',border:'#c7d8fe',text:'#3b6ef5'},
+  {bg:'#edfaf5',border:'#a7f3d0',text:'#0ea271'},
+  {bg:'#fff8e6',border:'#fde68a',text:'#d08a00'},
+  {bg:'#fef0f1',border:'#fecdd3',text:'#e0394a'},
+  {bg:'#f3f0ff',border:'#ddd6fe',text:'#7c3aed'},
+  {bg:'#fff3ed',border:'#fed7aa',text:'#e06020'},
+];
+const dbColors = {};
+let colorIdx = 0;
+
+function getDbColor(dbName) {
+  if (!dbColors[dbName]) {
+    dbColors[dbName] = COLORS[colorIdx % COLORS.length];
+    colorIdx++;
+  }
+  return dbColors[dbName];
+}
+
+async function loadCalendar() {
+  try {
+    const r = await fetch('/api/schedule/calendar?days=60');
+    calData = await r.json();
+    renderCalendar();
+    renderList();
+    renderLegend();
+  } catch(e) {
+    document.getElementById('schedule-list').innerHTML =
+      '<p style="color:var(--muted);font-size:13px">Failed to load schedule data</p>';
+  }
+}
+
+function renderCalendar() {
+  document.getElementById('month-label').textContent = MONTHS[currentMonth] + ' ' + currentYear;
+
+  // Headers
+  const headers = document.getElementById('cal-headers');
+  headers.innerHTML = DAYS.map(d => `<div class="cal-day-header">${d}</div>`).join('');
+
+  // Get first day of month and number of days
+  const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const today = new Date();
+
+  // Group events by date
+  const eventsByDate = {};
+  calData.forEach(item => {
+    const dt = (item.run_at || item.next_run || '').slice(0, 10);
+    if (!dt) return;
+    if (!eventsByDate[dt]) eventsByDate[dt] = [];
+    eventsByDate[dt].push(item);
+  });
+
+  const cells = document.getElementById('cal-cells');
+  let html = '';
+
+  // Empty cells before first day
+  for (let i = 0; i < firstDay; i++) {
+    html += '<div class="cal-cell other-month"></div>';
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = currentYear + '-' +
+      String(currentMonth + 1).padStart(2, '0') + '-' +
+      String(d).padStart(2, '0');
+    const isToday = today.getFullYear() === currentYear &&
+                    today.getMonth() === currentMonth &&
+                    today.getDate() === d;
+    const events  = eventsByDate[dateStr] || [];
+    const maxShow = 3;
+
+    const col = getDbColor;
+    const evHtml = events.slice(0, maxShow).map(ev => {
+      const c = getDbColor(ev.db_name || '');
+      const time = (ev.run_at || ev.next_run || '').slice(11, 16);
+      return `<div class="cal-event" title="${ev.db_name} - ${ev.cron}"
+                   style="background:${c.bg};border-color:${c.border};color:${c.text}">
+                ${time} ${ev.db_name || ''}
+              </div>`;
+    }).join('');
+
+    const more = events.length > maxShow ?
+      `<div class="cal-more">+${events.length - maxShow} more</div>` : '';
+
+    html += `
+      <div class="cal-cell${isToday ? ' today' : ''}">
+        <div class="cal-date${isToday ? ' today-num' : ''}">${d}</div>
+        ${evHtml}${more}
+      </div>`;
+  }
+
+  // Fill remaining cells
+  const total = firstDay + daysInMonth;
+  const remaining = (7 - (total % 7)) % 7;
+  for (let i = 0; i < remaining; i++) {
+    html += '<div class="cal-cell other-month"></div>';
+  }
+
+  cells.innerHTML = html;
+}
+
+function renderList() {
+  const list = document.getElementById('schedule-list');
+  if (!calData.length) {
+    list.innerHTML = '<p style="color:var(--muted);font-size:13px;padding:10px 0">No scheduled runs in the next 30 days</p>';
+    return;
+  }
+  // Sort by run_at
+  const sorted = [...calData].sort((a,b) =>
+    (a.run_at || a.next_run || '') < (b.run_at || b.next_run || '') ? -1 : 1
+  );
+  list.innerHTML = sorted.slice(0, 100).map(item => {
+    const dt    = item.run_at || item.next_run || '';
+    const c     = getDbColor(item.db_name || '');
+    const local = dt ? new Date(dt).toLocaleString() : '?';
+    return `
+      <div class="sched-list-item">
+        <div class="sched-time" style="color:${c.text}">${local}</div>
+        <div>
+          <div class="sched-db">${item.db_name || '—'}</div>
+          <div class="sched-cron">${item.cron || ''}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderLegend() {
+  const el = document.getElementById('schedules-legend');
+  const dbs = [...new Set(calData.map(i => i.db_name).filter(Boolean))];
+  if (!dbs.length) {
+    el.innerHTML = '<p style="color:var(--muted);font-size:13px">No active schedules</p>';
+    return;
+  }
+  el.innerHTML = dbs.map(db => {
+    const c = getDbColor(db);
+    return `<span style="display:inline-flex;align-items:center;gap:5px;margin:3px;padding:3px 10px;border-radius:5px;font-size:11px;font-weight:600;background:${c.bg};border:1px solid ${c.border};color:${c.text}">${db}</span>`;
+  }).join('');
+}
+
+function changeView(v) {
+  currentView = v;
+  document.getElementById('calendar-view').style.display = v === 'calendar' ? '' : 'none';
+  document.getElementById('list-view').style.display     = v === 'list'     ? '' : 'none';
+}
+
+function prevMonth() {
+  currentMonth--;
+  if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+  renderCalendar();
+}
+
+function nextMonth() {
+  currentMonth++;
+  if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+  renderCalendar();
+}
+
+loadCalendar();
+</script>
+</body>
+</html>
