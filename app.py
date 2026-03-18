@@ -1,10 +1,11 @@
+import io
 import os
 import json
 import time
 import uuid
 import shutil
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from flask import Flask, render_template, request, jsonify, send_file, abort
@@ -22,6 +23,9 @@ from compression import CompressionManager
 from security import get_audit_logger, get_rbac_manager
 from s3_integration import S3Integration
 from webdav_integration import WebDAVIntegration
+from restorer import RestoreManager, restore_progress, restore_cancel, preview_dump
+from backup_tester import BackupTester, get_test_results, get_test_result
+import reporter as reporter_module
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -37,6 +41,22 @@ verifier       = DumpVerifier()
 compressor     = CompressionManager()
 audit_logger   = get_audit_logger()
 rbac_manager   = get_rbac_manager()
+
+
+def _notifier_fn(event: str, details: dict):
+    """Notification bridge for BackupTester."""
+    settings = config_manager.get_settings()
+    notifier = NotificationManager(settings)
+    notifier.notify(event, details)
+
+
+restore_manager = RestoreManager(
+    progress_callback=lambda rid, data: socketio.emit(
+        'restore_progress', {'restore_id': rid, **data}, namespace='/'
+    )
+)
+backup_tester   = BackupTester(restore_manager=restore_manager,
+                                notifier_fn=_notifier_fn)
 
 scheduler = BackgroundScheduler()
 scheduler.start()
@@ -841,3 +861,306 @@ def list_compression_formats():
     formats = [{'id': fmt, 'ext': EXTENSIONS[fmt]} for fmt in SUPPORTED_FORMATS]
     formats.insert(0, {'id': 'none', 'ext': ''})
     return jsonify(formats)
+
+
+# ── Restore ───────────────────────────────────────────────────────────────────
+
+@app.route('/api/restore/preview/<dump_id>', methods=['POST'])
+def restore_preview(dump_id):
+    """Return table list, row counts, file size for a history dump."""
+    for item in config_manager.get_history():
+        if item.get('dump_id') == dump_id:
+            fp = item.get('filepath')
+            if not fp or not os.path.exists(fp):
+                return jsonify({'ok': False, 'message': 'File not found on disk'}), 404
+            try:
+                preview = preview_dump(fp)
+                return jsonify({'ok': True, **preview})
+            except Exception as e:
+                return jsonify({'ok': False, 'message': str(e)}), 500
+    return jsonify({'ok': False, 'message': 'History item not found'}), 404
+
+
+@app.route('/api/restore/start', methods=['POST'])
+def start_restore():
+    """
+    Start a restore operation.
+    Body: {dump_id, db_id, tables: [...], threads: int}
+    """
+    data    = request.json or {}
+    dump_id = data.get('dump_id')
+    db_id   = data.get('db_id')
+    tables  = data.get('tables') or None
+    threads = int(data.get('threads', 1))
+
+    # Find dump file
+    dump_file = None
+    for item in config_manager.get_history():
+        if item.get('dump_id') == dump_id:
+            dump_file = item.get('filepath')
+            break
+    if not dump_file:
+        return jsonify({'ok': False, 'message': 'Dump not found in history'}), 404
+    if not os.path.exists(dump_file):
+        return jsonify({'ok': False, 'message': 'Dump file missing from disk'}), 404
+
+    # Load target database config
+    db = config_manager.get_database(db_id)
+    if not db:
+        return jsonify({'ok': False, 'message': 'Target database not found'}), 404
+    db = crypto.decrypt_db_config(db)
+
+    restore_id = restore_manager.start(db, dump_file, tables=tables, threads=threads)
+    audit_logger.log('restore_started', resource=dump_file,
+                     details=f'restore_id={restore_id}, db={db.get("database")}')
+    return jsonify({'ok': True, 'restore_id': restore_id})
+
+
+@app.route('/api/restore/progress/<restore_id>', methods=['GET'])
+def get_restore_progress(restore_id):
+    prog = restore_progress.get(restore_id)
+    if prog is None:
+        return jsonify({'ok': False, 'message': 'Restore not found'}), 404
+    return jsonify({'ok': True, **prog})
+
+
+@app.route('/api/restore/cancel/<restore_id>', methods=['POST'])
+def cancel_restore(restore_id):
+    ok = restore_manager.cancel(restore_id)
+    if ok:
+        return jsonify({'ok': True, 'message': 'Cancellation requested'})
+    return jsonify({'ok': False, 'message': 'Restore not found'}), 404
+
+
+@app.route('/api/restore/all', methods=['GET'])
+def get_all_restores():
+    return jsonify(restore_progress)
+
+
+# ── Backup testing ────────────────────────────────────────────────────────────
+
+@app.route('/api/test-backup/run', methods=['POST'])
+def run_backup_test():
+    """
+    Schedule an automated restore test.
+    Body: {dump_id, db_id, cleanup: bool}
+    """
+    data    = request.json or {}
+    dump_id = data.get('dump_id', '')
+    db_id   = data.get('db_id', '')
+    cleanup = data.get('cleanup', True)
+
+    # Find dump file
+    dump_file = None
+    for item in config_manager.get_history():
+        if item.get('dump_id') == dump_id:
+            dump_file = item.get('filepath')
+            break
+    if not dump_file:
+        return jsonify({'ok': False, 'message': 'Dump not found'}), 404
+
+    # Load test database config
+    db = config_manager.get_database(db_id)
+    if not db:
+        return jsonify({'ok': False, 'message': 'Test database not found'}), 404
+    db = crypto.decrypt_db_config(db)
+
+    test_id = backup_tester.run_test(
+        dump_file=dump_file,
+        test_db_config=db,
+        dump_id=dump_id,
+        cleanup=cleanup,
+    )
+    audit_logger.log('backup_test_started', resource=dump_file,
+                     details=f'test_id={test_id}')
+    return jsonify({'ok': True, 'test_id': test_id})
+
+
+@app.route('/api/test-backup/results', methods=['GET'])
+def get_backup_test_results():
+    limit  = int(request.args.get('limit', 50))
+    offset = int(request.args.get('offset', 0))
+    return jsonify(get_test_results(limit=limit, offset=offset))
+
+
+@app.route('/api/test-backup/results/<test_id>', methods=['GET'])
+def get_backup_test_result(test_id):
+    result = get_test_result(test_id)
+    if not result:
+        return jsonify({'ok': False, 'message': 'Test result not found'}), 404
+    return jsonify({'ok': True, **result})
+
+
+# ── Reports & Analytics ───────────────────────────────────────────────────────
+
+@app.route('/api/reports/summary', methods=['GET'])
+def reports_summary():
+    period = int(request.args.get('days', 30))
+    history = config_manager.get_history()
+    summary = reporter_module.get_summary(history, period_days=period)
+    return jsonify(summary)
+
+
+@app.route('/api/reports/trends', methods=['GET'])
+def reports_trends():
+    history   = config_manager.get_history()
+    analytics = reporter_module.compute_analytics(history)
+    return jsonify({
+        'trends':       analytics['trends'],
+        'by_db':        analytics['by_db'],
+        'success_rate': analytics['success_rate'],
+        'sla':          analytics['sla'],
+        'top_errors':   analytics['top_errors'],
+    })
+
+
+@app.route('/api/reports/compliance', methods=['GET'])
+def reports_compliance():
+    history  = config_manager.get_history()
+    settings = config_manager.get_settings()
+    report   = reporter_module.compliance_report(history, settings)
+    return jsonify(report)
+
+
+@app.route('/api/reports/export/<fmt>', methods=['GET'])
+def reports_export(fmt: str):
+    history = config_manager.get_history()
+    period  = int(request.args.get('days', 30))
+
+    if fmt == 'csv':
+        csv_bytes = reporter_module.export_csv(history)
+        filename  = f'backup_report_{datetime.now().strftime("%Y%m%d")}.csv'
+        return send_file(
+            io.BytesIO(csv_bytes),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=filename,
+        )
+
+    if fmt == 'pdf':
+        pdf_bytes = reporter_module.export_pdf(history, period_days=period)
+        if pdf_bytes is None:
+            return jsonify({
+                'ok': False,
+                'message': 'reportlab not installed. Run: pip install reportlab'
+            }), 422
+        filename = f'backup_report_{datetime.now().strftime("%Y%m%d")}.pdf'
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename,
+        )
+
+    return jsonify({'ok': False, 'message': f'Unsupported format: {fmt}'}), 400
+
+
+# ── Schedule calendar ─────────────────────────────────────────────────────────
+
+@app.route('/api/schedule/calendar', methods=['GET'])
+def schedule_calendar():
+    """
+    Return upcoming scheduled run times for the next N days.
+    Query param: days (default 30)
+    """
+    try:
+        from croniter import croniter
+        has_croniter = True
+    except ImportError:
+        has_croniter = False
+
+    days      = int(request.args.get('days', 30))
+    schedules = config_manager.get_schedules()
+    now       = datetime.now()
+    end       = now + timedelta(days=days)
+
+    calendar_items = []
+    for s in schedules:
+        if not s.get('enabled', True):
+            continue
+        cron_expr = s.get('cron', '')
+        db_id     = s.get('db_id', '')
+        db        = config_manager.get_database(db_id)
+        db_name   = db.get('name', db_id) if db else db_id
+
+        if has_croniter:
+            try:
+                it = croniter(cron_expr, now)
+                for _ in range(min(days * 3, 200)):   # cap results
+                    nxt = it.get_next(datetime)
+                    if nxt > end:
+                        break
+                    calendar_items.append({
+                        'sched_id': s.get('id'),
+                        'db_name':  db_name,
+                        'cron':     cron_expr,
+                        'run_at':   nxt.isoformat(),
+                        'enabled':  s.get('enabled', True),
+                    })
+            except Exception:
+                pass
+        else:
+            # fallback: just return the schedule with next_run from APScheduler
+            job = active_jobs.get(s.get('id'))
+            next_run = None
+            if job:
+                try:
+                    next_run = job.next_run_time.isoformat() if job.next_run_time else None
+                except Exception:
+                    pass
+            calendar_items.append({
+                'sched_id': s.get('id'),
+                'db_name':  db_name,
+                'cron':     cron_expr,
+                'next_run': next_run,
+                'enabled':  s.get('enabled', True),
+            })
+
+    return jsonify(calendar_items)
+
+
+# ── Bulk dump operations ──────────────────────────────────────────────────────
+
+@app.route('/api/dumps/bulk-start', methods=['POST'])
+def bulk_start_dumps():
+    """
+    Start dumps for multiple databases.
+    Body: {db_ids: [...], save_path: '...'}
+    """
+    data      = request.json or {}
+    db_ids    = data.get('db_ids', [])
+    save_path = (data.get('save_path') or
+                 config_manager.get_settings().get('default_save_path', './dumps'))
+
+    if not db_ids:
+        return jsonify({'ok': False, 'message': 'No db_ids provided'}), 400
+
+    started = []
+    failed  = []
+    for db_id in db_ids:
+        db = config_manager.get_database(db_id)
+        if not db:
+            failed.append({'db_id': db_id, 'reason': 'not found'})
+            continue
+        dump_id = str(uuid.uuid4())
+        run_dump(db, dump_id, save_path)
+        started.append({'db_id': db_id, 'dump_id': dump_id})
+
+    return jsonify({'ok': True, 'started': started, 'failed': failed})
+
+
+# ── Routes for new pages ──────────────────────────────────────────────────────
+
+@app.route('/restore')
+def restore_page():
+    return render_template('restore.html')
+
+
+@app.route('/reports')
+def reports_page():
+    return render_template('reports.html')
+
+
+@app.route('/calendar')
+def calendar_page():
+    return render_template('calendar.html')

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DB Dump Manager — Reports</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f0f2f7;--surface:#fff;--surface2:#f5f7fb;--surface3:#e8ecf4;
+  --border:#dde2ee;
+  --accent:#3b6ef5;--accent-bg:#eff3ff;
+  --green:#0ea271;--green-bg:#edfaf5;
+  --red:#e0394a;--red-bg:#fef0f1;
+  --yellow:#d08a00;--yellow-bg:#fff8e6;
+  --text:#1a2035;--text2:#4a5578;--muted:#8892aa;
+  --radius:10px;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.04);
+  --mono:'JetBrains Mono',monospace;--sans:'Inter',sans-serif;
+}
+[data-theme="dark"]{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--surface3:#2a2f45;
+  --border:#2e3350;
+  --accent:#5b8af5;--accent-bg:#1a2040;
+  --green:#22c98a;--green-bg:#0d2a1e;
+  --red:#f05060;--red-bg:#2a1018;
+  --yellow:#f0b030;--yellow-bg:#2a2008;
+  --text:#e8eaf5;--text2:#a0a8c8;--muted:#606880;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;gap:14px}
+.topbar a{text-decoration:none;color:var(--text2);font-size:13px;font-weight:500}
+.topbar a:hover{color:var(--accent)}
+.topbar h1{font-size:15px;font-weight:700}
+.topbar .sep{color:var(--muted)}
+.main{max-width:1200px;margin:0 auto;padding:28px 24px}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:10px}
+.page-title{font-size:18px;font-weight:700}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);margin-bottom:14px}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow)}
+.stat-top{display:flex;align-items:flex-start;justify-content:space-between}
+.stat-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.stat-icon svg{width:17px;height:17px}
+.stat-icon.blue{background:var(--accent-bg);color:var(--accent)}
+.stat-icon.green{background:var(--green-bg);color:var(--green)}
+.stat-icon.red{background:var(--red-bg);color:var(--red)}
+.stat-icon.amber{background:var(--yellow-bg);color:var(--yellow)}
+.stat-value{font-size:24px;font-weight:700;font-family:var(--mono);margin-top:10px}
+.stat-label{font-size:11px;color:var(--muted);margin-top:2px;font-weight:500}
+.btn{display:inline-flex;align-items:center;gap:6px;border:none;cursor:pointer;padding:7px 14px;border-radius:7px;font-size:12px;font-weight:600;font-family:var(--sans);transition:all .12s}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{filter:brightness(1.1)}
+.btn-ghost{background:var(--surface2);color:var(--text2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn-success{background:var(--green-bg);color:var(--green);border:1px solid #a7f3d0}.btn-success:hover{background:#d1fae5}
+.btn-sm{padding:5px 9px;font-size:11px}
+select,input{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;color:var(--text);font-family:var(--mono);outline:none}
+select:focus,input:focus{border-color:var(--accent)}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-size:10px;font-weight:600;padding:9px 12px;text-align:left;border-bottom:1px solid var(--border);background:var(--surface2)}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--border)}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:var(--surface2)}
+.mono{font-family:var(--mono)}
+.pill{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;text-transform:uppercase}
+.pill.ok{background:var(--green-bg);color:var(--green)}
+.pill.fail{background:var(--red-bg);color:var(--red)}
+.issue-row{padding:7px 10px;background:var(--yellow-bg);border-left:3px solid var(--yellow);border-radius:4px;margin-bottom:5px;font-size:12px;color:var(--text2)}
+#toast{position:fixed;bottom:20px;right:20px;background:var(--text);color:#fff;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:500;transform:translateY(60px);opacity:0;transition:all .22s;z-index:999}
+#toast.show{transform:translateY(0);opacity:1}
+#toast.ok{background:var(--green)}
+#toast.err{background:var(--red)}
+canvas{max-height:300px}
+@media(max-width:900px){.grid4{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}.main{padding:16px 12px}}
+@media(max-width:500px){.grid4{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/">← Dashboard</a>
+  <span class="sep">|</span>
+  <h1>Reports & Analytics</h1>
+</div>
+
+<div class="main">
+  <div class="page-header">
+    <div class="page-title">📊 Backup Reports</div>
+    <div class="actions">
+      <select id="period-select" onchange="loadAll()">
+        <option value="7">Last 7 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="365">Last year</option>
+      </select>
+      <button class="btn btn-success btn-sm" onclick="exportReport('csv')">⬇ CSV</button>
+      <button class="btn btn-primary btn-sm" onclick="exportReport('pdf')">📄 PDF</button>
+      <button class="btn btn-ghost btn-sm" onclick="loadAll()">↻ Refresh</button>
+    </div>
+  </div>
+
+  <!-- Summary stats -->
+  <div class="grid4">
+    <div class="stat-card">
+      <div class="stat-top"><div><div class="stat-value" id="s-total">—</div><div class="stat-label">Total Dumps</div></div>
+        <div class="stat-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-top"><div><div class="stat-value" id="s-success-rate">—</div><div class="stat-label">Success Rate</div></div>
+        <div class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-top"><div><div class="stat-value" id="s-size">—</div><div class="stat-label">Total Size</div></div>
+        <div class="stat-icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-top"><div><div class="stat-value" id="s-dbs">—</div><div class="stat-label">Databases</div></div>
+        <div class="stat-icon red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="grid2">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Dump size over time</span></div>
+      <canvas id="chart-size"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Dump speed (MB/min)</span></div>
+      <canvas id="chart-speed"></canvas>
+    </div>
+  </div>
+
+  <!-- Per-DB breakdown -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Per-database breakdown</span></div>
+    <table class="tbl">
+      <thead><tr><th>Database</th><th>Dumps</th><th>Total Size</th><th>Avg Size</th><th>Avg Speed</th></tr></thead>
+      <tbody id="db-breakdown-body"></tbody>
+    </table>
+  </div>
+
+  <!-- Compliance -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Compliance report</span>
+      <button class="btn btn-ghost btn-sm" onclick="loadCompliance()">↻</button>
+    </div>
+    <div id="compliance-issues"></div>
+    <table class="tbl" style="margin-top:10px">
+      <thead><tr><th>Database</th><th>Last backup</th><th>Age (h)</th><th>Status</th><th>SLA</th></tr></thead>
+      <tbody id="compliance-body"></tbody>
+    </table>
+  </div>
+
+  <!-- Top errors -->
+  <div class="card" id="errors-card" style="display:none">
+    <div class="card-header"><span class="card-title">Top errors</span></div>
+    <table class="tbl">
+      <thead><tr><th>Message</th><th>Count</th></tr></thead>
+      <tbody id="errors-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let sizeChart, speedChart;
+
+function toast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'show' + (type?' '+type:'');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+function fmtBytes(b) {
+  if (!b) return '—';
+  if (b<1024) return b.toFixed?.(1)+' B':b+' B';
+  if (b<1024*1024) return (b/1024).toFixed(1)+' KB';
+  return (b/1024/1024).toFixed(2)+' MB';
+}
+
+async function api(method, url, body=null) {
+  const opts = {method, headers:{'Content-Type':'application/json'}};
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(url, opts);
+  return r.json();
+}
+
+async function loadSummary() {
+  const days = document.getElementById('period-select').value;
+  const s = await api('GET', `/api/reports/summary?days=${days}`);
+  document.getElementById('s-total').textContent     = s.total_dumps ?? '—';
+  document.getElementById('s-success-rate').textContent = (s.success_rate ?? '—') + '%';
+  document.getElementById('s-size').textContent      = fmtBytes((s.total_size_mb || 0) * 1024 * 1024);
+  document.getElementById('s-dbs').textContent       = s.databases ?? '—';
+}
+
+async function loadTrends() {
+  const data = await api('GET', '/api/reports/trends');
+
+  // Build datasets
+  const labels  = data.trends.map(t => t.date || '');
+  const sizes   = data.trends.map(t => t.size_mb || 0);
+  const speeds  = data.trends.map(t => t.speed_mbmin || 0);
+
+  // Size chart
+  const sizeCtx = document.getElementById('chart-size').getContext('2d');
+  if (sizeChart) sizeChart.destroy();
+  sizeChart = new Chart(sizeCtx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Size (MB)', data: sizes,
+        borderColor: '#3b6ef5', backgroundColor: 'rgba(59,110,245,.1)',
+        fill: true, tension: 0.3, pointRadius: 2,
+      }]
+    },
+    options: {responsive:true, plugins:{legend:{display:false}},
+              scales:{x:{ticks:{maxTicksLimit:8}},y:{beginAtZero:true}}}
+  });
+
+  // Speed chart
+  const speedCtx = document.getElementById('chart-speed').getContext('2d');
+  if (speedChart) speedChart.destroy();
+  speedChart = new Chart(speedCtx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'MB/min', data: speeds,
+        backgroundColor: 'rgba(14,162,113,.3)',
+        borderColor: '#0ea271', borderWidth: 1,
+      }]
+    },
+    options: {responsive:true, plugins:{legend:{display:false}},
+              scales:{x:{ticks:{maxTicksLimit:8}},y:{beginAtZero:true}}}
+  });
+
+  // Per-DB table
+  const tbody = document.getElementById('db-breakdown-body');
+  tbody.innerHTML = Object.entries(data.by_db || {}).map(([name, d]) => `
+    <tr>
+      <td>${name}</td>
+      <td class="mono">${d.count}</td>
+      <td class="mono">${fmtBytes(d.total_size_mb * 1024 * 1024)}</td>
+      <td class="mono">${fmtBytes(d.avg_size_mb * 1024 * 1024)}</td>
+      <td class="mono">${d.avg_speed_mbmin} MB/min</td>
+    </tr>
+  `).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">No data</td></tr>';
+
+  // Top errors
+  if (data.top_errors && data.top_errors.length) {
+    document.getElementById('errors-card').style.display = '';
+    document.getElementById('errors-body').innerHTML =
+      data.top_errors.map(e => `<tr><td>${e.message}</td><td class="mono">${e.count}</td></tr>`).join('');
+  }
+}
+
+async function loadCompliance() {
+  const data = await api('GET', '/api/reports/compliance');
+  const issues = document.getElementById('compliance-issues');
+  if (data.issues && data.issues.length) {
+    issues.innerHTML = data.issues.map(i =>
+      `<div class="issue-row">⚠️ ${i}</div>`
+    ).join('');
+  } else {
+    issues.innerHTML = '<div style="color:var(--green);font-size:12px;padding:6px 0">✅ All compliance checks passed</div>';
+  }
+  const tbody = document.getElementById('compliance-body');
+  tbody.innerHTML = Object.entries(data.databases || {}).map(([name, d]) => `
+    <tr>
+      <td>${name}</td>
+      <td class="mono">${(d.last_backup||'—').slice(0,16).replace('T',' ')}</td>
+      <td class="mono">${d.age_h}</td>
+      <td><span class="pill ${d.last_status === 'done' ? 'ok' : 'fail'}">${d.last_status||'—'}</span></td>
+      <td><span class="pill ${d.sla_ok ? 'ok' : 'fail'}">${d.sla_ok ? 'OK' : 'FAIL'}</span></td>
+    </tr>
+  `).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">No data</td></tr>';
+}
+
+async function exportReport(fmt) {
+  const days = document.getElementById('period-select').value;
+  toast(`Preparing ${fmt.toUpperCase()} export…`);
+  try {
+    const url = `/api/reports/export/${fmt}?days=${days}`;
+    const r   = await fetch(url);
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      toast(j.message || 'Export failed', 'err');
+      return;
+    }
+    const blob     = await r.blob();
+    const objUrl   = URL.createObjectURL(blob);
+    const a        = document.createElement('a');
+    const date     = new Date().toISOString().slice(0,10);
+    a.href         = objUrl;
+    a.download     = `backup_report_${date}.${fmt}`;
+    a.click();
+    URL.revokeObjectURL(objUrl);
+    toast(`${fmt.toUpperCase()} downloaded`, 'ok');
+  } catch(e) {
+    toast('Export error: ' + e.message, 'err');
+  }
+}
+
+async function loadAll() {
+  await Promise.all([loadSummary(), loadTrends(), loadCompliance()]);
+}
+
+loadAll();
+</script>
+</body>
+</html>
