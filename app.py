@@ -750,13 +750,6 @@ def restore_schedules():
             logger.warning(f'Could not restore schedule {s["id"]}: {e}')
 
 
-if __name__ == '__main__':
-    restore_schedules()
-    print('\n✅  DB Dump Manager running → http://127.0.0.1:5000\n')
-    print(f'   Encryption: {"enabled ✓" if crypto.is_available() else "disabled (install cryptography)"}')
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False)
-    #socketio.run(app, host='127.0.0.1', port=5000, debug=False)
-
 # ── Audit Log ─────────────────────────────────────────────────────────────────
 
 @app.route('/api/audit', methods=['GET'])
@@ -1167,3 +1160,11 @@ def reports_page():
 @app.route('/calendar')
 def calendar_page():
     return render_template('calendar.html')
+
+
+if __name__ == '__main__':
+    restore_schedules()
+    print('\n✅  DB Dump Manager running → http://127.0.0.1:5000\n')
+    print(f'   Encryption: {"enabled ✓" if crypto.is_available() else "disabled (install cryptography)"}')
+    socketio.run(app, host='0.0.0.0', port=5000, debug=False)
+    #socketio.run(app, host='127.0.0.1', port=5000, debug=False)
