@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DB Dump Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<style>
+:root {
+  --bg: #0d0f14;
+  --surface: #131720;
+  --surface2: #1a1f2e;
+  --surface3: #222840;
+  --border: #2a3048;
+  --accent: #4f8ef7;
+  --accent2: #7c3aed;
+  --green: #22d3a5;
+  --red: #f05a5a;
+  --yellow: #f5c542;
+  --text: #e8ecf5;
+  --muted: #6b7a9e;
+  --radius: 10px;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Syne', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; display: flex; flex-direction: column; }
+
+/* ── Layout ── */
+.layout { display: flex; flex: 1; overflow: hidden; height: 100vh; }
+.sidebar {
+  width: 220px; min-width: 220px; background: var(--surface);
+  border-right: 1px solid var(--border); display: flex; flex-direction: column;
+  padding: 0; position: relative;
+}
+.logo {
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.logo h1 {
+  font-size: 14px; font-weight: 800; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--accent);
+}
+.logo span { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+nav { flex: 1; padding: 12px 0; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px; cursor: pointer; font-size: 13px; font-weight: 600;
+  color: var(--muted); transition: all 0.15s; border-left: 2px solid transparent;
+  letter-spacing: 0.03em;
+}
+.nav-item:hover { color: var(--text); background: var(--surface2); }
+.nav-item.active { color: var(--accent); border-left-color: var(--accent); background: rgba(79,142,247,0.08); }
+.nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+.main { flex: 1; overflow-y: auto; padding: 28px; background: var(--bg); }
+.page { display: none; }
+.page.active { display: block; }
+
+/* ── Page header ── */
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.page-title { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+.page-title span { color: var(--muted); font-weight: 400; font-size: 14px; margin-left: 8px; font-family: var(--mono); }
+
+/* ── Cards ── */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+  transition: border-color 0.2s;
+}
+.card:hover { border-color: var(--accent); }
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.card-title { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+/* ── DB Item ── */
+.db-item {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px 20px;
+  display: flex; align-items: center; gap: 14px;
+  margin-bottom: 10px; transition: all 0.15s; cursor: default;
+}
+.db-item:hover { border-color: var(--border); background: var(--surface2); }
+.db-badge {
+  width: 38px; height: 38px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  letter-spacing: 0.05em; flex-shrink: 0;
+}
+.db-badge.pg { background: rgba(79,142,247,0.15); color: var(--accent); }
+.db-badge.my { background: rgba(34,211,165,0.15); color: var(--green); }
+.db-badge.or { background: rgba(245,197,66,0.15); color: var(--yellow); }
+.db-info { flex: 1; min-width: 0; }
+.db-name { font-size: 14px; font-weight: 700; }
+.db-host { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
+.db-actions { display: flex; gap: 8px; }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: 7px; font-size: 12px; font-weight: 700;
+  cursor: pointer; border: none; transition: all 0.15s; letter-spacing: 0.04em;
+  font-family: var(--sans); text-transform: uppercase;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: #3a7ae8; }
+.btn-success { background: rgba(34,211,165,0.15); color: var(--green); border: 1px solid rgba(34,211,165,0.3); }
+.btn-success:hover { background: rgba(34,211,165,0.25); }
+.btn-danger { background: rgba(240,90,90,0.15); color: var(--red); border: 1px solid rgba(240,90,90,0.3); }
+.btn-danger:hover { background: rgba(240,90,90,0.25); }
+.btn-ghost { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+.btn-ghost:hover { color: var(--text); border-color: var(--accent); }
+.btn-sm { padding: 5px 10px; font-size: 11px; }
+.btn-icon { padding: 6px; border-radius: 6px; background: transparent; border: 1px solid var(--border); color: var(--muted); cursor: pointer; transition: all 0.15s; display: inline-flex; }
+.btn-icon:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Form ── */
+.form-group { margin-bottom: 16px; }
+label { display: block; font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 6px; letter-spacing: 0.06em; text-transform: uppercase; }
+input, select, textarea {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 7px; padding: 9px 12px; font-size: 13px; color: var(--text);
+  font-family: var(--mono); transition: border-color 0.15s; outline: none;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+select option { background: var(--surface2); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.toggle-switch {
+  width: 36px; height: 20px; background: var(--border); border-radius: 10px;
+  position: relative; transition: background 0.2s; flex-shrink: 0;
+}
+.toggle-switch.on { background: var(--accent); }
+.toggle-switch::after {
+  content: ''; position: absolute; width: 14px; height: 14px;
+  background: #fff; border-radius: 50%; top: 3px; left: 3px; transition: left 0.2s;
+}
+.toggle-switch.on::after { left: 19px; }
+
+/* ── Progress ── */
+.progress-bar-wrap {
+  background: var(--surface3); border-radius: 4px; height: 6px; overflow: hidden; margin: 8px 0;
+}
+.progress-bar { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.4s; }
+.progress-bar.done { background: var(--green); }
+.progress-bar.error { background: var(--red); }
+
+.dump-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 20px; margin-bottom: 10px;
+}
+.dump-card.running { border-color: var(--accent); }
+.dump-card.done { border-color: var(--green); }
+.dump-card.error { border-color: var(--red); }
+.dump-header { display: flex; align-items: center; justify-content: space-between; }
+.dump-name { font-size: 13px; font-weight: 700; font-family: var(--mono); }
+.dump-status { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; letter-spacing: 0.06em; text-transform: uppercase; }
+.dump-status.running { background: rgba(79,142,247,0.2); color: var(--accent); }
+.dump-status.done { background: rgba(34,211,165,0.2); color: var(--green); }
+.dump-status.error { background: rgba(240,90,90,0.2); color: var(--red); }
+.dump-msg { font-size: 12px; color: var(--muted); font-family: var(--mono); margin-top: 4px; }
+
+/* ── Stat cards ── */
+.stat-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px;
+}
+.stat-value { font-size: 28px; font-weight: 800; font-family: var(--mono); }
+.stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 4px; }
+.stat-card.accent { border-color: rgba(79,142,247,0.3); background: rgba(79,142,247,0.05); }
+.stat-card.green { border-color: rgba(34,211,165,0.3); background: rgba(34,211,165,0.05); }
+.stat-card.red { border-color: rgba(240,90,90,0.3); background: rgba(240,90,90,0.05); }
+
+/* ── Disk gauge ── */
+.disk-gauge { margin-top: 10px; }
+.disk-gauge-bar { background: var(--surface3); border-radius: 6px; height: 10px; overflow: hidden; }
+.disk-gauge-fill { height: 100%; border-radius: 6px; background: var(--accent); transition: width 0.5s; }
+.disk-gauge-fill.warn { background: var(--yellow); }
+.disk-gauge-fill.danger { background: var(--red); }
+.disk-info { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 6px; font-family: var(--mono); }
+
+/* ── Modal ── */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+  display: none; align-items: center; justify-content: center; z-index: 100;
+  backdrop-filter: blur(4px);
+}
+.modal-backdrop.open { display: flex; }
+.modal {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 28px; width: 520px; max-width: 95vw;
+  max-height: 88vh; overflow-y: auto;
+  box-shadow: 0 40px 80px rgba(0,0,0,0.5);
+}
+.modal-title { font-size: 16px; font-weight: 800; margin-bottom: 20px; }
+.modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+
+/* ── Table ── */
+.table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.table th { color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-size: 10px; padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+.table td { padding: 10px 12px; border-bottom: 1px solid rgba(42,48,72,0.5); font-family: var(--mono); }
+.table tr:last-child td { border-bottom: none; }
+.table tr:hover td { background: var(--surface2); }
+
+/* ── Separator / section ── */
+.section-sep { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+.section-label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+
+/* ── Schedule ── */
+.sched-item {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 18px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px;
+}
+.sched-cron { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--accent); }
+.sched-db { font-size: 12px; color: var(--muted); }
+
+/* ── Toast ── */
+#toast {
+  position: fixed; bottom: 24px; right: 24px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 18px; font-size: 13px;
+  transform: translateY(80px); opacity: 0; transition: all 0.25s;
+  z-index: 999; max-width: 320px;
+}
+#toast.show { transform: translateY(0); opacity: 1; }
+#toast.ok { border-color: var(--green); color: var(--green); }
+#toast.err { border-color: var(--red); color: var(--red); }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── SSH section ── */
+.ssh-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.hidden { display: none !important; }
+
+.empty-state { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+.empty-state svg { width: 40px; height: 40px; margin-bottom: 12px; opacity: 0.3; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ── Sidebar ──────────────────────────────────────── -->
+<aside class="sidebar">
+  <div class="logo">
+    <h1>DB Dump</h1>
+    <span>Manager v1.0</span>
+  </div>
+  <nav>
+    <div class="nav-item active" onclick="showPage('dashboard')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Dashboard
+    </div>
+    <div class="nav-item" onclick="showPage('databases')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+      Databases
+    </div>
+    <div class="nav-item" onclick="showPage('dumps')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Active Dumps
+    </div>
+    <div class="nav-item" onclick="showPage('schedules')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Schedules
+    </div>
+    <div class="nav-item" onclick="showPage('history')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h6l1 4-3.5 2a11 11 0 0 0 7.5 7.5l2-3.5 4 1v6a2 2 0 0 1-2 2A18 18 0 0 1 1 5a2 2 0 0 1 2-2z"/></svg>
+      History
+    </div>
+    <div class="nav-item" onclick="showPage('settings')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 1.43 14.14M16.24 7.76a6 6 0 0 1 0 8.49M4.93 19.07a10 10 0 0 1 0-14.14M7.76 16.24a6 6 0 0 1 0-8.49"/></svg>
+      Settings
+    </div>
+  </nav>
+</aside>
+
+<!-- ── Main ──────────────────────────────────────────── -->
+<main class="main">
+
+<!-- Dashboard -->
+<div id="page-dashboard" class="page active">
+  <div class="page-header">
+    <div class="page-title">Dashboard</div>
+    <button class="btn btn-primary btn-sm" onclick="showPage('databases')">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      New Dump
+    </button>
+  </div>
+  <div class="grid3" style="margin-bottom:20px">
+    <div class="stat-card accent"><div class="stat-value" id="stat-dbs">0</div><div class="stat-label">Databases</div></div>
+    <div class="stat-card green"><div class="stat-value" id="stat-done">0</div><div class="stat-label">Completed Dumps</div></div>
+    <div class="stat-card red"><div class="stat-value" id="stat-sched">0</div><div class="stat-label">Schedules Active</div></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">Disk Space</div>
+      <button class="btn btn-ghost btn-sm" onclick="refreshDisk()">Refresh</button>
+    </div>
+    <div id="disk-info">
+      <div class="disk-gauge">
+        <div class="disk-gauge-bar"><div class="disk-gauge-fill" id="disk-bar" style="width:0%"></div></div>
+        <div class="disk-info"><span id="disk-used">—</span><span id="disk-free">—</span><span id="disk-total">—</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <div class="card-header"><div class="card-title">Recent Dumps</div></div>
+    <div id="dash-history"></div>
+  </div>
+</div>
+
+<!-- Databases -->
+<div id="page-databases" class="page">
+  <div class="page-header">
+    <div class="page-title">Databases</div>
+    <button class="btn btn-primary" onclick="openAddDB()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add Database
+    </button>
+  </div>
+  <div id="db-list">
+    <div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><br>No databases yet. Add one to get started.</div>
+  </div>
+</div>
+
+<!-- Active Dumps -->
+<div id="page-dumps" class="page">
+  <div class="page-header">
+    <div class="page-title">Active Dumps</div>
+  </div>
+  <div id="dump-list">
+    <div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><br>No active dumps.</div>
+  </div>
+</div>
+
+<!-- Schedules -->
+<div id="page-schedules" class="page">
+  <div class="page-header">
+    <div class="page-title">Schedules</div>
+    <button class="btn btn-primary" onclick="openAddSchedule()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add Schedule
+    </button>
+  </div>
+  <div id="sched-list">
+    <div class="empty-state">No schedules configured.</div>
+  </div>
+</div>
+
+<!-- History -->
+<div id="page-history" class="page">
+  <div class="page-header">
+    <div class="page-title">Dump History</div>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <table class="table">
+      <thead><tr><th>Database</th><th>File</th><th>Size</th><th>Created</th><th>Status</th><th></th></tr></thead>
+      <tbody id="history-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Settings -->
+<div id="page-settings" class="page">
+  <div class="page-header"><div class="page-title">Settings</div></div>
+  <div class="card">
+    <div class="card-title" style="margin-bottom:16px">General</div>
+    <div class="form-group">
+      <label>Default Save Path</label>
+      <input id="s-save-path" type="text" placeholder="./dumps">
+    </div>
+    <div class="form-group">
+      <label>Max History Entries</label>
+      <input id="s-max-history" type="number" value="100" min="10" max="1000">
+    </div>
+    <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div class="card-title" style="margin-bottom:12px">Disk Check Path</div>
+    <div style="display:flex;gap:10px">
+      <input id="s-disk-path" type="text" placeholder="C:\Dumps or /mnt/dumps">
+      <button class="btn btn-ghost" onclick="checkDiskCustom()">Check</button>
+    </div>
+    <div id="s-disk-result" style="margin-top:10px;font-size:12px;font-family:var(--mono);color:var(--muted)"></div>
+  </div>
+</div>
+
+</main>
+</div><!-- /layout -->
+
+<!-- ── Add/Edit DB Modal ───────────────────────────────── -->
+<div class="modal-backdrop" id="modal-db">
+<div class="modal">
+  <div class="modal-title" id="modal-db-title">Add Database</div>
+  <input type="hidden" id="db-edit-id">
+
+  <div class="form-row">
+    <div class="form-group">
+      <label>Name / Alias</label>
+      <input id="db-name" type="text" placeholder="Production DB">
+    </div>
+    <div class="form-group">
+      <label>DB Type</label>
+      <select id="db-type">
+        <option value="postgresql">PostgreSQL</option>
+        <option value="mysql">MySQL</option>
+        <option value="oracle">Oracle</option>
+      </select>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Host</label>
+      <input id="db-host" type="text" placeholder="192.168.1.10">
+    </div>
+    <div class="form-group">
+      <label>Port</label>
+      <input id="db-port" type="number" placeholder="5432">
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>User</label>
+      <input id="db-user" type="text" placeholder="dbuser">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input id="db-pass" type="password" placeholder="••••••••">
+    </div>
+  </div>
+  <div class="form-group">
+    <label>Database / Schema Name</label>
+    <input id="db-database" type="text" placeholder="mydb">
+  </div>
+  <div id="oracle-fields" class="hidden">
+    <div class="form-group">
+      <label>Oracle Service Name</label>
+      <input id="db-service" type="text" placeholder="ORCL">
+    </div>
+  </div>
+
+  <hr class="section-sep">
+  <div class="section-label">Dump Options</div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Include Tables (comma-sep, empty=all)</label>
+      <input id="db-include" type="text" placeholder="users, orders">
+    </div>
+    <div class="form-group">
+      <label>Exclude Tables (comma-sep)</label>
+      <input id="db-exclude" type="text" placeholder="logs, temp">
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label class="toggle" onclick="toggleOpt('db-no-data')">
+        <span class="toggle-switch" id="db-no-data-sw"></span>
+        Schema only (no data)
+      </label>
+    </div>
+    <div class="form-group">
+      <label class="toggle" onclick="toggleOpt('db-no-schema')">
+        <span class="toggle-switch" id="db-no-schema-sw"></span>
+        Data only (no schema)
+      </label>
+    </div>
+  </div>
+  <div class="form-group">
+    <label>Estimated DB Size (MB) — for disk check</label>
+    <input id="db-size" type="number" placeholder="500" value="500">
+  </div>
+
+  <hr class="section-sep">
+  <div class="section-label">
+    <label class="toggle" style="text-transform:none;font-size:12px;letter-spacing:0" onclick="toggleSSH()">
+      <span class="toggle-switch" id="ssh-toggle-sw"></span>
+      Connect via SSH Tunnel
+    </label>
+  </div>
+  <div class="ssh-section hidden" id="ssh-fields">
+    <div class="form-row">
+      <div class="form-group">
+        <label>SSH Host</label>
+        <input id="db-ssh-host" type="text" placeholder="server.example.com">
+      </div>
+      <div class="form-group">
+        <label>SSH Port</label>
+        <input id="db-ssh-port" type="number" placeholder="22" value="22">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>SSH User</label>
+      <input id="db-ssh-user" type="text" placeholder="ubuntu">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>SSH Password</label>
+        <input id="db-ssh-pass" type="password" placeholder="••••••••">
+      </div>
+      <div class="form-group">
+        <label>SSH Key Path (optional)</label>
+        <input id="db-ssh-key" type="text" placeholder="~/.ssh/id_rsa">
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('modal-db')">Cancel</button>
+    <button class="btn btn-success btn-sm" onclick="testConn()" id="btn-test">Test Connection</button>
+    <button class="btn btn-primary" onclick="saveDB()">Save</button>
+  </div>
+</div>
+</div>
+
+<!-- ── Start Dump Modal ───────────────────────────────── -->
+<div class="modal-backdrop" id="modal-dump">
+<div class="modal">
+  <div class="modal-title">Start Dump</div>
+  <input type="hidden" id="dump-db-id">
+  <div class="form-group">
+    <label>Save To</label>
+    <input id="dump-save-path" type="text" placeholder="./dumps">
+  </div>
+  <div id="dump-disk-check" style="margin-bottom:12px"></div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('modal-dump')">Cancel</button>
+    <button class="btn btn-primary" onclick="startDump()">▶ Start Dump</button>
+  </div>
+</div>
+</div>
+
+<!-- ── Add Schedule Modal ──────────────────────────────── -->
+<div class="modal-backdrop" id="modal-sched">
+<div class="modal">
+  <div class="modal-title">Add Schedule</div>
+  <div class="form-group">
+    <label>Database</label>
+    <select id="sched-db-id"></select>
+  </div>
+  <div class="form-group">
+    <label>Cron Expression</label>
+    <input id="sched-cron" type="text" placeholder="0 2 * * *" value="0 2 * * *">
+  </div>
+  <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:12px">
+    Examples: <b>0 2 * * *</b> = daily at 02:00 &nbsp; <b>0 */6 * * *</b> = every 6h &nbsp; <b>0 3 * * 0</b> = weekly Sunday 03:00
+  </div>
+  <div class="form-group">
+    <label>Save To (leave empty for default)</label>
+    <input id="sched-save-path" type="text" placeholder="./dumps">
+  </div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('modal-sched')">Cancel</button>
+    <button class="btn btn-primary" onclick="addSchedule()">Save Schedule</button>
+  </div>
+</div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const socket = io();
+let databases = [];
+let schedules = [];
+let history = [];
+let dumpProgress = {};
+let toOpts = {noData: false, noSchema: false, useSSH: false};
+
+// ── Navigation ──────────────────────────────────────────
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if (n.textContent.toLowerCase().includes(id === 'dumps' ? 'active' : id.slice(0,4))) n.classList.add('active');
+  });
+  if (id === 'dashboard') refreshDashboard();
+  if (id === 'databases') renderDBs();
+  if (id === 'dumps') renderDumps();
+  if (id === 'schedules') renderSchedules();
+  if (id === 'history') renderHistory();
+  if (id === 'settings') loadSettings();
+}
+
+// ── Toast ────────────────────────────────────────────────
+function toast(msg, type='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  setTimeout(() => t.className = '', 3000);
+}
+
+// ── API ──────────────────────────────────────────────────
+async function api(method, url, body) {
+  const res = await fetch(url, {
+    method, headers: {'Content-Type':'application/json'},
+    body: body ? JSON.stringify(body) : undefined
+  });
+  return res.json();
+}
+
+// ── Socket.IO progress ───────────────────────────────────
+socket.on('progress', data => {
+  dumpProgress[data.dump_id] = data;
+  renderDumps();
+  if (data.status === 'done') { loadHistory(); updateStats(); }
+});
+
+// ── Dashboard ────────────────────────────────────────────
+async function refreshDashboard() {
+  const [dbs, hist, scheds] = await Promise.all([
+    api('GET', '/api/databases'),
+    api('GET', '/api/history'),
+    api('GET', '/api/schedules')
+  ]);
+  databases = dbs; history = hist; schedules = scheds;
+  document.getElementById('stat-dbs').textContent = dbs.length;
+  document.getElementById('stat-done').textContent = hist.length;
+  document.getElementById('stat-sched').textContent = scheds.filter(s=>s.enabled).length;
+  renderDashHistory();
+  refreshDisk();
+}
+
+async function refreshDisk() {
+  const settings = await api('GET', '/api/settings');
+  const path = settings.default_save_path || './dumps';
+  const d = await api('POST', '/api/disk', {path});
+  if (d.ok) {
+    document.getElementById('disk-bar').style.width = d.percent + '%';
+    document.getElementById('disk-bar').className = 'disk-gauge-fill' + (d.percent > 90 ? ' danger' : d.percent > 75 ? ' warn' : '');
+    document.getElementById('disk-used').textContent = `Used: ${d.used_gb} GB`;
+    document.getElementById('disk-free').textContent = `Free: ${d.free_gb} GB`;
+    document.getElementById('disk-total').textContent = `Total: ${d.total_gb} GB`;
+  }
+}
+
+function updateStats() {
+  document.getElementById('stat-done').textContent = history.length;
+}
+
+function renderDashHistory() {
+  const el = document.getElementById('dash-history');
+  if (!history.length) { el.innerHTML = '<div class="empty-state" style="padding:20px">No dumps yet.</div>'; return; }
+  el.innerHTML = history.slice(0,5).map(h => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:12px;font-family:var(--mono)">${h.filename}</span>
+      <span style="font-size:11px;color:var(--muted)">${formatDate(h.created_at)}</span>
+    </div>
+  `).join('');
+}
+
+// ── Databases ────────────────────────────────────────────
+async function loadDBs() {
+  databases = await api('GET', '/api/databases');
+}
+
+function renderDBs() {
+  loadDBs().then(() => {
+    const el = document.getElementById('db-list');
+    if (!databases.length) {
+      el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><br>No databases. Click "Add Database".</div>';
+      return;
+    }
+    el.innerHTML = databases.map(db => {
+      const badgeClass = {postgresql:'pg', mysql:'my', oracle:'or'}[db.type] || 'pg';
+      const badgeText = {postgresql:'PG', mysql:'MY', oracle:'OR'}[db.type] || '?';
+      return `
+      <div class="db-item">
+        <div class="db-badge ${badgeClass}">${badgeText}</div>
+        <div class="db-info">
+          <div class="db-name">${db.name}</div>
+          <div class="db-host">${db.user}@${db.host}:${db.port||defaultPort(db.type)} / ${db.database}</div>
+        </div>
+        <div class="db-actions">
+          <button class="btn btn-success btn-sm" onclick="openDumpModal('${db.id}')">▶ Dump</button>
+          <button class="btn-icon" title="Edit" onclick="editDB('${db.id}')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn-icon" title="Delete" onclick="deleteDB('${db.id}')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+          </button>
+        </div>
+      </div>`;
+    }).join('');
+  });
+}
+
+function defaultPort(type) {
+  return {postgresql:5432, mysql:3306, oracle:1521}[type] || '';
+}
+
+function openAddDB() {
+  clearDBForm();
+  document.getElementById('modal-db-title').textContent = 'Add Database';
+  document.getElementById('db-edit-id').value = '';
+  document.getElementById('modal-db').classList.add('open');
+}
+
+function editDB(id) {
+  const db = databases.find(d => d.id === id);
+  if (!db) return;
+  clearDBForm();
+  document.getElementById('modal-db-title').textContent = 'Edit Database';
+  document.getElementById('db-edit-id').value = db.id;
+  document.getElementById('db-name').value = db.name || '';
+  document.getElementById('db-type').value = db.type || 'postgresql';
+  document.getElementById('db-host').value = db.host || '';
+  document.getElementById('db-port').value = db.port || '';
+  document.getElementById('db-user').value = db.user || '';
+  document.getElementById('db-pass').value = db.password || '';
+  document.getElementById('db-database').value = db.database || '';
+  document.getElementById('db-service').value = db.service_name || '';
+  document.getElementById('db-include').value = (db.include_tables||[]).join(', ');
+  document.getElementById('db-exclude').value = (db.exclude_tables||[]).join(', ');
+  document.getElementById('db-size').value = db.estimated_size_mb || 500;
+  setToggle('db-no-data', db.no_data); toOpts.noData = !!db.no_data;
+  setToggle('db-no-schema', db.no_schema); toOpts.noSchema = !!db.no_schema;
+  if (db.use_ssh) {
+    toOpts.useSSH = true; setToggle('ssh-toggle', true);
+    document.getElementById('ssh-fields').classList.remove('hidden');
+    document.getElementById('db-ssh-host').value = db.ssh_host || '';
+    document.getElementById('db-ssh-port').value = db.ssh_port || 22;
+    document.getElementById('db-ssh-user').value = db.ssh_user || '';
+    document.getElementById('db-ssh-pass').value = db.ssh_password || '';
+    document.getElementById('db-ssh-key').value = db.ssh_key || '';
+  }
+  handleTypeChange();
+  document.getElementById('modal-db').classList.add('open');
+}
+
+function clearDBForm() {
+  ['db-name','db-host','db-port','db-user','db-pass','db-database','db-service','db-include','db-exclude','db-ssh-host','db-ssh-user','db-ssh-pass','db-ssh-key'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('db-port').placeholder = '5432';
+  document.getElementById('db-size').value = 500;
+  document.getElementById('db-ssh-port').value = 22;
+  toOpts = {noData:false, noSchema:false, useSSH:false};
+  setToggle('db-no-data', false); setToggle('db-no-schema', false); setToggle('ssh-toggle', false);
+  document.getElementById('ssh-fields').classList.add('hidden');
+  document.getElementById('oracle-fields').classList.add('hidden');
+}
+
+document.getElementById('db-type').addEventListener('change', handleTypeChange);
+function handleTypeChange() {
+  const type = document.getElementById('db-type').value;
+  const ports = {postgresql:5432, mysql:3306, oracle:1521};
+  document.getElementById('db-port').placeholder = ports[type];
+  document.getElementById('oracle-fields').classList.toggle('hidden', type !== 'oracle');
+}
+
+function toggleOpt(key) {
+  if (key === 'db-no-data') { toOpts.noData = !toOpts.noData; setToggle(key, toOpts.noData); }
+  if (key === 'db-no-schema') { toOpts.noSchema = !toOpts.noSchema; setToggle(key, toOpts.noSchema); }
+}
+function toggleSSH() {
+  toOpts.useSSH = !toOpts.useSSH;
+  setToggle('ssh-toggle', toOpts.useSSH);
+  document.getElementById('ssh-fields').classList.toggle('hidden', !toOpts.useSSH);
+}
+function setToggle(key, val) {
+  const sw = document.getElementById(key + '-sw');
+  if (sw) sw.classList.toggle('on', !!val);
+}
+
+async function testConn() {
+  const id = document.getElementById('db-edit-id').value;
+  if (!id) { toast('Save the database first', 'err'); return; }
+  const btn = document.getElementById('btn-test');
+  btn.textContent = 'Testing...'; btn.disabled = true;
+  const r = await api('POST', `/api/databases/${id}/test`);
+  btn.textContent = 'Test Connection'; btn.disabled = false;
+  toast(r.message, r.ok ? 'ok' : 'err');
+}
+
+async function saveDB() {
+  const id = document.getElementById('db-edit-id').value;
+  const incl = document.getElementById('db-include').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const excl = document.getElementById('db-exclude').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const data = {
+    name: document.getElementById('db-name').value,
+    type: document.getElementById('db-type').value,
+    host: document.getElementById('db-host').value,
+    port: parseInt(document.getElementById('db-port').value) || null,
+    user: document.getElementById('db-user').value,
+    password: document.getElementById('db-pass').value,
+    database: document.getElementById('db-database').value,
+    service_name: document.getElementById('db-service').value,
+    include_tables: incl, exclude_tables: excl,
+    no_data: toOpts.noData, no_schema: toOpts.noSchema,
+    estimated_size_mb: parseInt(document.getElementById('db-size').value) || 500,
+    use_ssh: toOpts.useSSH,
+    ssh_host: document.getElementById('db-ssh-host').value,
+    ssh_port: parseInt(document.getElementById('db-ssh-port').value) || 22,
+    ssh_user: document.getElementById('db-ssh-user').value,
+    ssh_password: document.getElementById('db-ssh-pass').value,
+    ssh_key: document.getElementById('db-ssh-key').value,
+  };
+  if (!data.name || !data.host || !data.user || !data.database) { toast('Fill required fields', 'err'); return; }
+  if (id) { await api('PUT', `/api/databases/${id}`, data); } else { await api('POST', '/api/databases', data); }
+  closeModal('modal-db');
+  renderDBs();
+  toast('Database saved');
+}
+
+async function deleteDB(id) {
+  if (!confirm('Delete this database config?')) return;
+  await api('DELETE', `/api/databases/${id}`);
+  renderDBs();
+  toast('Deleted');
+}
+
+// ── Dump ─────────────────────────────────────────────────
+async function openDumpModal(dbId) {
+  const settings = await api('GET', '/api/settings');
+  document.getElementById('dump-db-id').value = dbId;
+  document.getElementById('dump-save-path').value = settings.default_save_path || './dumps';
+  document.getElementById('dump-disk-check').innerHTML = '';
+  document.getElementById('modal-dump').classList.add('open');
+}
+
+async function startDump() {
+  const dbId = document.getElementById('dump-db-id').value;
+  const savePath = document.getElementById('dump-save-path').value;
+  const r = await api('POST', '/api/dump/start', {db_id: dbId, save_path: savePath});
+  if (r.ok) {
+    closeModal('modal-dump');
+    showPage('dumps');
+    toast('Dump started!');
+  } else {
+    toast(r.message || 'Error', 'err');
+  }
+}
+
+function renderDumps() {
+  const el = document.getElementById('dump-list');
+  const entries = Object.entries(dumpProgress);
+  if (!entries.length) {
+    el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><br>No active dumps.</div>';
+    return;
+  }
+  el.innerHTML = entries.reverse().map(([id, d]) => `
+    <div class="dump-card ${d.status}">
+      <div class="dump-header">
+        <div>
+          <div class="dump-name">${d.filename || id.slice(0,8)+'...'}</div>
+          <div class="dump-msg">${d.message || ''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="dump-status ${d.status}">${d.status}</span>
+          ${d.status === 'done' ? `<button class="btn btn-success btn-sm" onclick="downloadDump('${id}')">⬇ Download</button>` : ''}
+        </div>
+      </div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar ${d.status}" style="width:${d.percent||0}%"></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:4px">
+        ${d.percent||0}% ${d.size ? '• ' + formatBytes(d.size) : ''}
+        ${d.started_at ? '• Started: ' + formatDate(d.started_at) : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function downloadDump(id) {
+  window.location.href = `/api/dump/download/${id}`;
+}
+
+// ── Schedules ────────────────────────────────────────────
+async function loadSchedules() {
+  schedules = await api('GET', '/api/schedules');
+}
+
+async function renderSchedules() {
+  await loadDBs(); await loadSchedules();
+  const el = document.getElementById('sched-list');
+  if (!schedules.length) { el.innerHTML = '<div class="empty-state">No schedules. Add one.</div>'; return; }
+  const dbMap = Object.fromEntries(databases.map(d => [d.id, d]));
+  el.innerHTML = schedules.map(s => {
+    const db = dbMap[s.db_id];
+    return `
+    <div class="sched-item">
+      <div style="flex:1">
+        <div class="sched-cron">${s.cron}</div>
+        <div class="sched-db">${db ? db.name : 'Unknown DB'} → ${s.save_path || 'default'}</div>
+      </div>
+      <label class="toggle" onclick="toggleSched('${s.id}')">
+        <span class="toggle-switch ${s.enabled ? 'on' : ''}"></span>
+      </label>
+      <button class="btn-icon" onclick="deleteSched('${s.id}')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+async function openAddSchedule() {
+  await loadDBs();
+  const sel = document.getElementById('sched-db-id');
+  sel.innerHTML = databases.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+  document.getElementById('modal-sched').classList.add('open');
+}
+
+async function addSchedule() {
+  const data = {
+    db_id: document.getElementById('sched-db-id').value,
+    cron: document.getElementById('sched-cron').value,
+    save_path: document.getElementById('sched-save-path').value,
+  };
+  if (!data.cron) { toast('Enter cron expression', 'err'); return; }
+  const r = await api('POST', '/api/schedules', data);
+  if (r.ok) { closeModal('modal-sched'); renderSchedules(); toast('Schedule added'); }
+  else toast(r.message || 'Error', 'err');
+}
+
+async function toggleSched(id) {
+  await api('POST', `/api/schedules/${id}/toggle`);
+  renderSchedules();
+}
+
+async function deleteSched(id) {
+  if (!confirm('Delete schedule?')) return;
+  await api('DELETE', `/api/schedules/${id}`);
+  renderSchedules();
+  toast('Deleted');
+}
+
+// ── History ──────────────────────────────────────────────
+async function loadHistory() { history = await api('GET', '/api/history'); }
+
+async function renderHistory() {
+  await loadHistory();
+  const tb = document.getElementById('history-tbody');
+  if (!history.length) { tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">No history yet.</td></tr>'; return; }
+  tb.innerHTML = history.map(h => `
+    <tr>
+      <td>${h.db_name || '—'}</td>
+      <td>${h.filename}</td>
+      <td>${formatBytes(h.size)}</td>
+      <td>${formatDate(h.created_at)}</td>
+      <td><span class="dump-status ${h.status}">${h.status}</span></td>
+      <td style="display:flex;gap:6px;padding:8px 12px">
+        ${h.status === 'done' ? `<button class="btn btn-success btn-sm" onclick="window.location.href='/api/history/download/${h.filename}'">⬇</button>` : ''}
+        <button class="btn btn-danger btn-sm" onclick="deleteHistory('${h.dump_id}')">✕</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function deleteHistory(id) {
+  await api('DELETE', `/api/history/${id}`);
+  renderHistory();
+}
+
+// ── Settings ─────────────────────────────────────────────
+async function loadSettings() {
+  const s = await api('GET', '/api/settings');
+  document.getElementById('s-save-path').value = s.default_save_path || './dumps';
+  document.getElementById('s-max-history').value = s.max_history || 100;
+}
+
+async function saveSettings() {
+  const data = {
+    default_save_path: document.getElementById('s-save-path').value,
+    max_history: parseInt(document.getElementById('s-max-history').value) || 100,
+  };
+  await api('POST', '/api/settings', data);
+  toast('Settings saved');
+}
+
+async function checkDiskCustom() {
+  const path = document.getElementById('s-disk-path').value;
+  if (!path) { toast('Enter a path', 'err'); return; }
+  const d = await api('POST', '/api/disk', {path});
+  const el = document.getElementById('s-disk-result');
+  if (d.ok) el.innerHTML = `<span style="color:var(--green)">✓</span> Total: ${d.total_gb}GB | Used: ${d.used_gb}GB | Free: ${d.free_gb}GB (${d.percent}%)`;
+  else el.innerHTML = `<span style="color:var(--red)">✗ ${d.message}</span>`;
+}
+
+// ── Modal ────────────────────────────────────────────────
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-backdrop').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// ── Utils ────────────────────────────────────────────────
+function formatBytes(b) {
+  if (!b) return '—';
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  if (b < 1073741824) return (b/1048576).toFixed(1) + ' MB';
+  return (b/1073741824).toFixed(2) + ' GB';
+}
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+
+// ── Init ─────────────────────────────────────────────────
+refreshDashboard();
+</script>
+</body>
+</html>

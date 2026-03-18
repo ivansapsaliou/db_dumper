@@ -1,0 +1,10 @@
+flask>=3.0.0
+flask-socketio>=5.3.6
+apscheduler>=3.10.4
+paramiko>=3.4.0
+psycopg2-binary>=2.9.9
+pymysql>=1.1.0
+cx_Oracle>=8.3.0
+cryptography>=42.0.0
+eventlet>=0.35.2
+psutil>=5.9.8
