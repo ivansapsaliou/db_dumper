@@ -2,258 +2,217 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>DB Dump Manager</title>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-:root {
-  --bg: #0d0f14;
-  --surface: #131720;
-  --surface2: #1a1f2e;
-  --surface3: #222840;
-  --border: #2a3048;
-  --accent: #4f8ef7;
-  --accent2: #7c3aed;
-  --green: #22d3a5;
-  --red: #f05a5a;
-  --yellow: #f5c542;
-  --text: #e8ecf5;
-  --muted: #6b7a9e;
-  --radius: 10px;
-  --mono: 'JetBrains Mono', monospace;
-  --sans: 'Syne', sans-serif;
+:root{
+  --bg:#f0f2f7;--surface:#fff;--surface2:#f5f7fb;--surface3:#e8ecf4;
+  --border:#dde2ee;--border2:#c8cfe0;
+  --accent:#3b6ef5;--accent-bg:#eff3ff;
+  --green:#0ea271;--green-bg:#edfaf5;
+  --red:#e0394a;--red-bg:#fef0f1;
+  --yellow:#d08a00;--yellow-bg:#fff8e6;
+  --orange:#e06020;--orange-bg:#fff3ed;
+  --text:#1a2035;--text2:#4a5578;--muted:#8892aa;
+  --radius:10px;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.04);
+  --shadow-md:0 4px 24px rgba(0,0,0,.10);
+  --mono:'JetBrains Mono',monospace;--sans:'Inter',sans-serif;
 }
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; display: flex; flex-direction: column; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex;height:100vh;overflow:hidden}
 
-/* ── Layout ── */
-.layout { display: flex; flex: 1; overflow: hidden; height: 100vh; }
-.sidebar {
-  width: 220px; min-width: 220px; background: var(--surface);
-  border-right: 1px solid var(--border); display: flex; flex-direction: column;
-  padding: 0; position: relative;
-}
-.logo {
-  padding: 24px 20px 20px;
-  border-bottom: 1px solid var(--border);
-}
-.logo h1 {
-  font-size: 14px; font-weight: 800; letter-spacing: 0.05em;
-  text-transform: uppercase; color: var(--accent);
-}
-.logo span { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+/* ── Sidebar ── */
+.sidebar{width:236px;min-width:236px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.logo{padding:20px 18px 16px;border-bottom:1px solid var(--border)}
+.logo-row{display:flex;align-items:center;gap:10px}
+.logo-icon{width:32px;height:32px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center}
+.logo-icon svg{width:16px;height:16px;color:#fff}
+.logo h1{font-size:13px;font-weight:700;color:var(--text)}
+.logo span{font-family:var(--mono);font-size:10px;color:var(--muted)}
+nav{flex:1;padding:8px 10px;overflow-y:auto}
+.nav-sec{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;padding:12px 8px 4px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text2);border-radius:7px;transition:all .12s;margin-bottom:1px;user-select:none}
+.nav-item:hover{color:var(--text);background:var(--surface2)}
+.nav-item.active{color:var(--accent);background:var(--accent-bg);font-weight:600}
+.nav-item svg{width:15px;height:15px;flex-shrink:0}
+.nav-badge{margin-left:auto;background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px}
+.nav-badge.red{background:var(--red)}
 
-nav { flex: 1; padding: 12px 0; }
-.nav-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 20px; cursor: pointer; font-size: 13px; font-weight: 600;
-  color: var(--muted); transition: all 0.15s; border-left: 2px solid transparent;
-  letter-spacing: 0.03em;
-}
-.nav-item:hover { color: var(--text); background: var(--surface2); }
-.nav-item.active { color: var(--accent); border-left-color: var(--accent); background: rgba(79,142,247,0.08); }
-.nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+/* ── Main ── */
+.main{flex:1;overflow-y:auto;padding:26px 30px;background:var(--bg)}
+.page{display:none;animation:fi .15s ease}
+.page.active{display:block}
+@keyframes fi{from{opacity:.4;transform:translateY(4px)}to{opacity:1;transform:none}}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
+.page-title{font-size:18px;font-weight:700;letter-spacing:-.02em}
 
-.main { flex: 1; overflow-y: auto; padding: 28px; background: var(--bg); }
-.page { display: none; }
-.page.active { display: block; }
+/* ── Grid ── */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
 
-/* ── Page header ── */
-.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
-.page-title { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
-.page-title span { color: var(--muted); font-weight: 400; font-size: 14px; margin-left: 8px; font-family: var(--mono); }
+/* ── Stat card ── */
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow)}
+.stat-top{display:flex;align-items:flex-start;justify-content:space-between}
+.stat-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.stat-icon svg{width:17px;height:17px}
+.stat-icon.blue{background:var(--accent-bg);color:var(--accent)}
+.stat-icon.green{background:var(--green-bg);color:var(--green)}
+.stat-icon.red{background:var(--red-bg);color:var(--red)}
+.stat-icon.amber{background:var(--yellow-bg);color:var(--yellow)}
+.stat-value{font-size:24px;font-weight:700;font-family:var(--mono);margin-top:10px}
+.stat-label{font-size:11px;color:var(--muted);margin-top:2px;font-weight:500}
 
-/* ── Cards ── */
-.card {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
-  transition: border-color 0.2s;
-}
-.card:hover { border-color: var(--accent); }
-.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-.card-title { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+/* ── Card ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);margin-bottom:14px}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.card-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
-
-/* ── DB Item ── */
-.db-item {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 18px 20px;
-  display: flex; align-items: center; gap: 14px;
-  margin-bottom: 10px; transition: all 0.15s; cursor: default;
-}
-.db-item:hover { border-color: var(--border); background: var(--surface2); }
-.db-badge {
-  width: 38px; height: 38px; border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--mono); font-size: 10px; font-weight: 700;
-  letter-spacing: 0.05em; flex-shrink: 0;
-}
-.db-badge.pg { background: rgba(79,142,247,0.15); color: var(--accent); }
-.db-badge.my { background: rgba(34,211,165,0.15); color: var(--green); }
-.db-badge.or { background: rgba(245,197,66,0.15); color: var(--yellow); }
-.db-info { flex: 1; min-width: 0; }
-.db-name { font-size: 14px; font-weight: 700; }
-.db-host { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 2px; }
-.db-actions { display: flex; gap: 8px; }
+/* ── DB item ── */
+.db-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px 15px;display:flex;align-items:center;gap:12px;margin-bottom:8px;box-shadow:var(--shadow);transition:border-color .15s,box-shadow .15s}
+.db-item:hover{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
+.db-badge{width:34px;height:34px;border-radius:7px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.04em}
+.db-badge.pg{background:#dbeafe;color:#1d4ed8}
+.db-badge.my{background:#dcfce7;color:#15803d}
+.db-badge.or{background:#fef9c3;color:#92400e}
+.db-info{flex:1;min-width:0}
+.db-name{font-size:13px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.db-host{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.db-actions{display:flex;gap:6px;flex-shrink:0}
 
 /* ── Buttons ── */
-.btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 8px 16px; border-radius: 7px; font-size: 12px; font-weight: 700;
-  cursor: pointer; border: none; transition: all 0.15s; letter-spacing: 0.04em;
-  font-family: var(--sans); text-transform: uppercase;
-}
-.btn-primary { background: var(--accent); color: #fff; }
-.btn-primary:hover { background: #3a7ae8; }
-.btn-success { background: rgba(34,211,165,0.15); color: var(--green); border: 1px solid rgba(34,211,165,0.3); }
-.btn-success:hover { background: rgba(34,211,165,0.25); }
-.btn-danger { background: rgba(240,90,90,0.15); color: var(--red); border: 1px solid rgba(240,90,90,0.3); }
-.btn-danger:hover { background: rgba(240,90,90,0.25); }
-.btn-ghost { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
-.btn-ghost:hover { color: var(--text); border-color: var(--accent); }
-.btn-sm { padding: 5px 10px; font-size: 11px; }
-.btn-icon { padding: 6px; border-radius: 6px; background: transparent; border: 1px solid var(--border); color: var(--muted); cursor: pointer; transition: all 0.15s; display: inline-flex; }
-.btn-icon:hover { border-color: var(--accent); color: var(--accent); }
+.btn{display:inline-flex;align-items:center;gap:6px;border:none;cursor:pointer;padding:7px 13px;border-radius:7px;font-size:12px;font-weight:600;font-family:var(--sans);transition:all .12s;letter-spacing:.01em;white-space:nowrap}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#2d5ce0}
+.btn-success{background:var(--green-bg);color:var(--green);border:1px solid #a7f3d0}.btn-success:hover{background:#d1fae5}
+.btn-danger{background:var(--red-bg);color:var(--red);border:1px solid #fecdd3}.btn-danger:hover{background:#fee2e2}
+.btn-ghost{background:var(--surface2);color:var(--text2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-bg)}
+.btn-warn{background:var(--orange-bg);color:var(--orange);border:1px solid #fed7aa}.btn-warn:hover{background:#ffedd5}
+.btn-sm{padding:5px 9px;font-size:11px}
+.btn-icon{width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .12s}
+.btn-icon:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-bg)}
+.btn-icon svg{width:13px;height:13px}
 
 /* ── Form ── */
-.form-group { margin-bottom: 16px; }
-label { display: block; font-size: 11px; font-weight: 700; color: var(--muted); margin-bottom: 6px; letter-spacing: 0.06em; text-transform: uppercase; }
-input, select, textarea {
-  width: 100%; background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 7px; padding: 9px 12px; font-size: 13px; color: var(--text);
-  font-family: var(--mono); transition: border-color 0.15s; outline: none;
-}
-input:focus, select:focus, textarea:focus { border-color: var(--accent); }
-select option { background: var(--surface2); }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.form-row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-.toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; }
-.toggle-switch {
-  width: 36px; height: 20px; background: var(--border); border-radius: 10px;
-  position: relative; transition: background 0.2s; flex-shrink: 0;
-}
-.toggle-switch.on { background: var(--accent); }
-.toggle-switch::after {
-  content: ''; position: absolute; width: 14px; height: 14px;
-  background: #fff; border-radius: 50%; top: 3px; left: 3px; transition: left 0.2s;
-}
-.toggle-switch.on::after { left: 19px; }
+.form-group{margin-bottom:13px}
+label{display:block;font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;letter-spacing:.02em}
+input[type=text],input[type=number],input[type=password],input[type=email],select,textarea{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;color:var(--text);font-family:var(--mono);transition:border-color .12s,box-shadow .12s;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.form-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px}
 
-/* ── Progress ── */
-.progress-bar-wrap {
-  background: var(--surface3); border-radius: 4px; height: 6px; overflow: hidden; margin: 8px 0;
-}
-.progress-bar { height: 100%; background: var(--accent); border-radius: 4px; transition: width 0.4s; }
-.progress-bar.done { background: var(--green); }
-.progress-bar.error { background: var(--red); }
+/* ── Toggle ── */
+.toggle-row{display:flex;align-items:center;gap:9px;cursor:pointer;padding:4px 0;user-select:none}
+.toggle-sw{width:34px;height:19px;border-radius:10px;border:1px solid var(--border2);background:var(--surface3);position:relative;flex-shrink:0;transition:all .18s}
+.toggle-sw.on{background:var(--accent);border-color:var(--accent)}
+.toggle-sw::after{content:'';position:absolute;width:13px;height:13px;background:#fff;border-radius:50%;top:2px;left:2px;transition:left .18s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle-sw.on::after{left:17px}
+.toggle-label{font-size:12px;font-weight:500;color:var(--text2)}
 
-.dump-card {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 16px 20px; margin-bottom: 10px;
-}
-.dump-card.running { border-color: var(--accent); }
-.dump-card.done { border-color: var(--green); }
-.dump-card.error { border-color: var(--red); }
-.dump-header { display: flex; align-items: center; justify-content: space-between; }
-.dump-name { font-size: 13px; font-weight: 700; font-family: var(--mono); }
-.dump-status { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; letter-spacing: 0.06em; text-transform: uppercase; }
-.dump-status.running { background: rgba(79,142,247,0.2); color: var(--accent); }
-.dump-status.done { background: rgba(34,211,165,0.2); color: var(--green); }
-.dump-status.error { background: rgba(240,90,90,0.2); color: var(--red); }
-.dump-msg { font-size: 12px; color: var(--muted); font-family: var(--mono); margin-top: 4px; }
+/* ── Dump card ── */
+.dump-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:9px;box-shadow:var(--shadow)}
+.dump-card.running{border-left:3px solid var(--accent)}
+.dump-card.done{border-left:3px solid var(--green)}
+.dump-card.error{border-left:3px solid var(--red)}
+.dump-card.cancelled{border-left:3px solid var(--muted)}
+.dump-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.dump-name{font-size:12px;font-weight:600;color:var(--text);font-family:var(--mono)}
+.dump-msg{font-size:11px;color:var(--text2);margin-top:3px;line-height:1.4}
+.dump-right{display:flex;align-items:center;gap:7px;flex-shrink:0}
+.pill{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.04em;text-transform:uppercase}
+.pill.running{background:var(--accent-bg);color:var(--accent)}
+.pill.done{background:var(--green-bg);color:var(--green)}
+.pill.error{background:var(--red-bg);color:var(--red)}
+.pill.cancelled{background:var(--surface3);color:var(--muted)}
+.pill.pending{background:var(--surface3);color:var(--muted)}
+.pill.ok{background:var(--green-bg);color:var(--green)}
+.pill.warn{background:var(--yellow-bg);color:var(--yellow)}
+.progress-wrap{background:var(--surface3);border-radius:4px;height:4px;margin:9px 0 5px;overflow:hidden}
+.progress-fill{height:100%;border-radius:4px;transition:width .35s ease}
+.progress-fill.running{background:var(--accent)}
+.progress-fill.done{background:var(--green)}
+.progress-fill.error{background:var(--red)}
+.dump-meta{display:flex;gap:14px;font-size:10px;color:var(--muted);font-family:var(--mono)}
 
-/* ── Stat cards ── */
-.stat-card {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 20px;
-}
-.stat-value { font-size: 28px; font-weight: 800; font-family: var(--mono); }
-.stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 4px; }
-.stat-card.accent { border-color: rgba(79,142,247,0.3); background: rgba(79,142,247,0.05); }
-.stat-card.green { border-color: rgba(34,211,165,0.3); background: rgba(34,211,165,0.05); }
-.stat-card.red { border-color: rgba(240,90,90,0.3); background: rgba(240,90,90,0.05); }
-
-/* ── Disk gauge ── */
-.disk-gauge { margin-top: 10px; }
-.disk-gauge-bar { background: var(--surface3); border-radius: 6px; height: 10px; overflow: hidden; }
-.disk-gauge-fill { height: 100%; border-radius: 6px; background: var(--accent); transition: width 0.5s; }
-.disk-gauge-fill.warn { background: var(--yellow); }
-.disk-gauge-fill.danger { background: var(--red); }
-.disk-info { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: 6px; font-family: var(--mono); }
-
-/* ── Modal ── */
-.modal-backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.7);
-  display: none; align-items: center; justify-content: center; z-index: 100;
-  backdrop-filter: blur(4px);
-}
-.modal-backdrop.open { display: flex; }
-.modal {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: 14px; padding: 28px; width: 520px; max-width: 95vw;
-  max-height: 88vh; overflow-y: auto;
-  box-shadow: 0 40px 80px rgba(0,0,0,0.5);
-}
-.modal-title { font-size: 16px; font-weight: 800; margin-bottom: 20px; }
-.modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+/* ── Disk bar ── */
+.disk-bar-wrap{background:var(--surface3);border-radius:5px;height:7px;overflow:hidden;margin:8px 0 5px}
+.disk-bar-fill{height:100%;border-radius:5px;background:var(--accent);transition:width .5s}
+.disk-bar-fill.warn{background:var(--yellow)}
+.disk-bar-fill.danger{background:var(--red)}
+.disk-row{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);font-family:var(--mono)}
 
 /* ── Table ── */
-.table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.table th { color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-size: 10px; padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
-.table td { padding: 10px 12px; border-bottom: 1px solid rgba(42,48,72,0.5); font-family: var(--mono); }
-.table tr:last-child td { border-bottom: none; }
-.table tr:hover td { background: var(--surface2); }
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-size:10px;font-weight:600;padding:9px 12px;text-align:left;border-bottom:1px solid var(--border);background:var(--surface2)}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--text)}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:var(--surface2)}
+.tbl .mono{font-family:var(--mono);font-size:11px}
 
-/* ── Separator / section ── */
-.section-sep { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
-.section-label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+/* ── Schedule item ── */
+.sched-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 15px;display:flex;align-items:center;gap:11px;margin-bottom:7px;box-shadow:var(--shadow)}
+.sched-cron{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent)}
+.sched-info{flex:1}
+.sched-db{font-size:11px;color:var(--muted);margin-top:2px}
 
-/* ── Schedule ── */
-.sched-item {
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 14px 18px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px;
-}
-.sched-cron { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--accent); }
-.sched-db { font-size: 12px; color: var(--muted); }
+/* ── Modal ── */
+.modal-backdrop{position:fixed;inset:0;background:rgba(15,20,40,.45);display:none;align-items:center;justify-content:center;z-index:200;backdrop-filter:blur(3px)}
+.modal-backdrop.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px 26px;width:580px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-md)}
+.modal-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:18px}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+
+/* ── Misc ── */
+.section-sep{border:none;border-top:1px solid var(--border);margin:16px 0}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.section-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+.ssh-section{margin-top:6px;padding:14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px}
+.info-box{background:var(--accent-bg);border:1px solid #c7d8fe;border-radius:7px;padding:9px 12px;font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5}
+.warn-box{background:var(--yellow-bg);border:1px solid #fde68a;border-radius:7px;padding:9px 12px;font-size:12px;color:#92400e;margin-bottom:12px}
+.format-badge{display:inline-flex;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:10px;font-weight:600;color:var(--text2);font-family:var(--mono)}
+.badge-ssh{background:var(--accent-bg);border-color:#c7d8fe;color:var(--accent)}
+.empty-state{text-align:center;padding:44px 20px;color:var(--muted);font-size:13px}
+.empty-state svg{width:34px;height:34px;margin:0 auto 10px;display:block;opacity:.3}
+.hidden{display:none!important}
+
+/* ── Verify checks ── */
+.check-list{margin-top:10px}
+.check-item{display:flex;align-items:flex-start;gap:8px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px}
+.check-item:last-child{border-bottom:none}
+.check-icon{width:16px;height:16px;border-radius:50%;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700}
+.check-icon.ok{background:var(--green-bg);color:var(--green)}
+.check-icon.fail{background:var(--red-bg);color:var(--red)}
+.check-name{font-weight:500;color:var(--text)}
+.check-detail{color:var(--muted);font-family:var(--mono)}
 
 /* ── Toast ── */
-#toast {
-  position: fixed; bottom: 24px; right: 24px;
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 8px; padding: 12px 18px; font-size: 13px;
-  transform: translateY(80px); opacity: 0; transition: all 0.25s;
-  z-index: 999; max-width: 320px;
-}
-#toast.show { transform: translateY(0); opacity: 1; }
-#toast.ok { border-color: var(--green); color: var(--green); }
-#toast.err { border-color: var(--red); color: var(--red); }
+#toast{position:fixed;bottom:20px;right:20px;background:var(--text);color:#fff;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:500;transform:translateY(60px);opacity:0;transition:all .22s;z-index:999;max-width:320px;box-shadow:var(--shadow-md)}
+#toast.show{transform:translateY(0);opacity:1}
+#toast.ok{background:var(--green)}
+#toast.err{background:var(--red)}
 
-/* ── Scrollbar ── */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
-/* ── SSH section ── */
-.ssh-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
-.hidden { display: none !important; }
-
-.empty-state { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
-.empty-state svg { width: 40px; height: 40px; margin-bottom: 12px; opacity: 0.3; }
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 </style>
 </head>
 <body>
-<div class="layout">
 
-<!-- ── Sidebar ──────────────────────────────────────── -->
+<!-- ══ Sidebar ══════════════════════════════════════════ -->
 <aside class="sidebar">
   <div class="logo">
-    <h1>DB Dump</h1>
-    <span>Manager v1.0</span>
+    <div class="logo-row">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+      </div>
+      <div><h1>DB Dump Manager</h1><span>v3.0</span></div>
+    </div>
   </div>
   <nav>
+    <div class="nav-sec">Overview</div>
     <div class="nav-item active" onclick="showPage('dashboard')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
       Dashboard
@@ -265,52 +224,84 @@ select option { background: var(--surface2); }
     <div class="nav-item" onclick="showPage('dumps')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       Active Dumps
+      <span class="nav-badge" id="badge-dumps" style="display:none">0</span>
     </div>
+    <div class="nav-sec">Management</div>
     <div class="nav-item" onclick="showPage('schedules')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       Schedules
     </div>
     <div class="nav-item" onclick="showPage('history')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h6l1 4-3.5 2a11 11 0 0 0 7.5 7.5l2-3.5 4 1v6a2 2 0 0 1-2 2A18 18 0 0 1 1 5a2 2 0 0 1 2-2z"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       History
     </div>
+    <div class="nav-sec">Config</div>
     <div class="nav-item" onclick="showPage('settings')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 1.43 14.14M16.24 7.76a6 6 0 0 1 0 8.49M4.93 19.07a10 10 0 0 1 0-14.14M7.76 16.24a6 6 0 0 1 0-8.49"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></svg>
       Settings
+    </div>
+    <div class="nav-item" onclick="showPage('notifications')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      Notifications
+    </div>
+    <div class="nav-item" onclick="showPage('retention')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+      Retention
     </div>
   </nav>
 </aside>
 
-<!-- ── Main ──────────────────────────────────────────── -->
+<!-- ══ Main ════════════════════════════════════════════ -->
 <main class="main">
 
 <!-- Dashboard -->
 <div id="page-dashboard" class="page active">
   <div class="page-header">
     <div class="page-title">Dashboard</div>
-    <button class="btn btn-primary btn-sm" onclick="showPage('databases')">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      New Dump
-    </button>
+    <button class="btn btn-primary btn-sm" onclick="showPage('databases')">+ New Dump</button>
   </div>
-  <div class="grid3" style="margin-bottom:20px">
-    <div class="stat-card accent"><div class="stat-value" id="stat-dbs">0</div><div class="stat-label">Databases</div></div>
-    <div class="stat-card green"><div class="stat-value" id="stat-done">0</div><div class="stat-label">Completed Dumps</div></div>
-    <div class="stat-card red"><div class="stat-value" id="stat-sched">0</div><div class="stat-label">Schedules Active</div></div>
-  </div>
-  <div class="card">
-    <div class="card-header"><div class="card-title">Disk Space</div>
-      <button class="btn btn-ghost btn-sm" onclick="refreshDisk()">Refresh</button>
+  <div class="grid4">
+    <div class="stat-card">
+      <div class="stat-top"><div><div class="stat-value" id="stat-dbs">0</div><div class="stat-label">Databases</div></div>
+        <div class="stat-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
+      </div>
     </div>
-    <div id="disk-info">
-      <div class="disk-gauge">
-        <div class="disk-gauge-bar"><div class="disk-gauge-fill" id="disk-bar" style="width:0%"></div></div>
-        <div class="disk-info"><span id="disk-used">—</span><span id="disk-free">—</span><span id="disk-total">—</span></div>
+    <div class="stat-card">
+      <div class="stat-top"><div><div class="stat-value" id="stat-done">0</div><div class="stat-label">Completed</div></div>
+        <div class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-top"><div><div class="stat-value" id="stat-rate">—</div><div class="stat-label">Success Rate</div></div>
+        <div class="stat-icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-top"><div><div class="stat-value" id="stat-sched">0</div><div class="stat-label">Schedules</div></div>
+        <div class="stat-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
       </div>
     </div>
   </div>
-  <div class="card" style="margin-top:12px">
-    <div class="card-header"><div class="card-title">Recent Dumps</div></div>
+  <div class="grid2">
+    <div class="card">
+      <div class="card-header"><div class="card-title">Dump Size History</div></div>
+      <canvas id="chart-timeline" height="140"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">Size by Database</div></div>
+      <canvas id="chart-bydb" height="140"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Disk Space</div>
+      <button class="btn btn-ghost btn-sm" onclick="refreshDisk()">↻</button>
+    </div>
+    <div class="disk-bar-wrap"><div class="disk-bar-fill" id="disk-bar" style="width:0%"></div></div>
+    <div class="disk-row"><span id="disk-used">—</span><span id="disk-free">—</span><span id="disk-total">—</span></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">Recent Activity</div></div>
     <div id="dash-history"></div>
   </div>
 </div>
@@ -319,48 +310,32 @@ select option { background: var(--surface2); }
 <div id="page-databases" class="page">
   <div class="page-header">
     <div class="page-title">Databases</div>
-    <button class="btn btn-primary" onclick="openAddDB()">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      Add Database
-    </button>
+    <button class="btn btn-primary" onclick="openAddDB()">+ Add Database</button>
   </div>
-  <div id="db-list">
-    <div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><br>No databases yet. Add one to get started.</div>
-  </div>
+  <div id="db-list"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>No databases yet.</div></div>
 </div>
 
 <!-- Active Dumps -->
 <div id="page-dumps" class="page">
-  <div class="page-header">
-    <div class="page-title">Active Dumps</div>
-  </div>
-  <div id="dump-list">
-    <div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><br>No active dumps.</div>
-  </div>
+  <div class="page-header"><div class="page-title">Active Dumps</div></div>
+  <div id="dump-list"><div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>No active dumps.</div></div>
 </div>
 
 <!-- Schedules -->
 <div id="page-schedules" class="page">
   <div class="page-header">
     <div class="page-title">Schedules</div>
-    <button class="btn btn-primary" onclick="openAddSchedule()">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      Add Schedule
-    </button>
+    <button class="btn btn-primary" onclick="openAddSchedule()">+ Add Schedule</button>
   </div>
-  <div id="sched-list">
-    <div class="empty-state">No schedules configured.</div>
-  </div>
+  <div id="sched-list"><div class="empty-state">No schedules configured.</div></div>
 </div>
 
 <!-- History -->
 <div id="page-history" class="page">
-  <div class="page-header">
-    <div class="page-title">Dump History</div>
-  </div>
+  <div class="page-header"><div class="page-title">Dump History</div></div>
   <div class="card" style="padding:0;overflow:hidden">
-    <table class="table">
-      <thead><tr><th>Database</th><th>File</th><th>Size</th><th>Created</th><th>Status</th><th></th></tr></thead>
+    <table class="tbl">
+      <thead><tr><th>Database</th><th>File</th><th>Size</th><th>Created</th><th>Status</th><th>Verify</th><th></th></tr></thead>
       <tbody id="history-tbody"></tbody>
     </table>
   </div>
@@ -370,193 +345,255 @@ select option { background: var(--surface2); }
 <div id="page-settings" class="page">
   <div class="page-header"><div class="page-title">Settings</div></div>
   <div class="card">
-    <div class="card-title" style="margin-bottom:16px">General</div>
-    <div class="form-group">
-      <label>Default Save Path</label>
-      <input id="s-save-path" type="text" placeholder="./dumps">
+    <div class="card-header"><div class="card-title">General</div></div>
+    <div class="form-row">
+      <div class="form-group"><label>Default Save Path</label><input id="s-save-path" type="text" placeholder="./dumps"></div>
+      <div class="form-group"><label>Max History Entries</label><input id="s-max-history" type="number" value="100"></div>
     </div>
     <div class="form-group">
-      <label>Max History Entries</label>
-      <input id="s-max-history" type="number" value="100" min="10" max="1000">
+      <div class="toggle-row" onclick="toggleBool('s-auto-verify')">
+        <div class="toggle-sw" id="s-auto-verify-sw"></div>
+        <div class="toggle-label">Auto-verify dump integrity after each download</div>
+      </div>
     </div>
-    <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+    <button class="btn btn-primary btn-sm" onclick="saveSettings()">Save</button>
   </div>
-  <div class="card" style="margin-top:16px">
-    <div class="card-title" style="margin-bottom:12px">Disk Check Path</div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">Disk Check</div></div>
     <div style="display:flex;gap:10px">
       <input id="s-disk-path" type="text" placeholder="C:\Dumps or /mnt/dumps">
-      <button class="btn btn-ghost" onclick="checkDiskCustom()">Check</button>
+      <button class="btn btn-ghost" onclick="checkDiskCustom()" style="white-space:nowrap">Check</button>
     </div>
-    <div id="s-disk-result" style="margin-top:10px;font-size:12px;font-family:var(--mono);color:var(--muted)"></div>
+    <div id="s-disk-result" style="margin-top:9px;font-size:12px;font-family:var(--mono);color:var(--text2)"></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">Encryption</div></div>
+    <div id="enc-status" style="font-size:13px;color:var(--text2)">Loading…</div>
   </div>
 </div>
 
-</main>
-</div><!-- /layout -->
+<!-- Notifications -->
+<div id="page-notifications" class="page">
+  <div class="page-header"><div class="page-title">Notifications</div></div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">Master Switch</div></div>
+    <div class="toggle-row" onclick="toggleBool('n-enabled')">
+      <div class="toggle-sw" id="n-enabled-sw"></div>
+      <div class="toggle-label">Enable notifications</div>
+    </div>
+  </div>
 
-<!-- ── Add/Edit DB Modal ───────────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Email (SMTP)</div>
+      <div class="toggle-row" onclick="toggleBool('n-email')" style="padding:0">
+        <div class="toggle-sw" id="n-email-sw"></div><div class="toggle-label" style="margin-left:6px">Enable</div>
+      </div>
+    </div>
+    <div class="form-row3">
+      <div class="form-group"><label>SMTP Host</label><input id="n-smtp-host" type="text" placeholder="smtp.gmail.com"></div>
+      <div class="form-group"><label>Port</label><input id="n-smtp-port" type="number" placeholder="587"></div>
+      <div class="form-group"><label>Use TLS</label><div class="toggle-row" onclick="toggleBool('n-tls')" style="margin-top:6px"><div class="toggle-sw on" id="n-tls-sw"></div><div class="toggle-label">TLS</div></div></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>SMTP User</label><input id="n-smtp-user" type="text" placeholder="you@gmail.com"></div>
+      <div class="form-group"><label>SMTP Password</label><input id="n-smtp-pass" type="password" placeholder="app password"></div>
+    </div>
+    <div class="form-group"><label>Send To (comma-sep)</label><input id="n-email-to" type="text" placeholder="admin@company.com"></div>
+    <button class="btn btn-ghost btn-sm" onclick="testNotif('email')">Send Test Email</button>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Telegram Bot</div>
+      <div class="toggle-row" onclick="toggleBool('n-tg')" style="padding:0">
+        <div class="toggle-sw" id="n-tg-sw"></div><div class="toggle-label" style="margin-left:6px">Enable</div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Bot Token</label><input id="n-tg-token" type="text" placeholder="123456:ABC-DEF…"></div>
+      <div class="form-group"><label>Chat ID</label><input id="n-tg-chat" type="text" placeholder="-100123456789"></div>
+    </div>
+    <div class="info-box">Get your Chat ID by messaging @userinfobot on Telegram.</div>
+    <button class="btn btn-ghost btn-sm" onclick="testNotif('telegram')">Send Test Message</button>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Webhook</div>
+      <div class="toggle-row" onclick="toggleBool('n-wh')" style="padding:0">
+        <div class="toggle-sw" id="n-wh-sw"></div><div class="toggle-label" style="margin-left:6px">Enable</div>
+      </div>
+    </div>
+    <div class="form-group"><label>Webhook URL (POST JSON)</label><input id="n-wh-url" type="text" placeholder="https://hooks.slack.com/…"></div>
+    <button class="btn btn-ghost btn-sm" onclick="testNotif('webhook')">Send Test Webhook</button>
+  </div>
+  <button class="btn btn-primary" onclick="saveNotifications()">Save Notification Settings</button>
+</div>
+
+<!-- Retention -->
+<div id="page-retention" class="page">
+  <div class="page-header"><div class="page-title">Retention Policy</div></div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">Policy</div></div>
+    <div class="toggle-row" onclick="toggleBool('ret-enabled')" style="margin-bottom:14px">
+      <div class="toggle-sw" id="ret-enabled-sw"></div>
+      <div class="toggle-label">Enable automatic retention cleanup</div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Keep Last N dumps per DB (0 = unlimited)</label><input id="ret-keep-n" type="number" value="10" min="0"></div>
+      <div class="form-group"><label>Delete dumps older than (days, 0 = unlimited)</label><input id="ret-keep-days" type="number" value="30" min="0"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-primary btn-sm" onclick="saveRetention()">Save Policy</button>
+      <button class="btn btn-ghost btn-sm" onclick="previewRetention()">Preview what will be deleted</button>
+      <button class="btn btn-danger btn-sm" onclick="applyRetention()">Apply Now</button>
+    </div>
+  </div>
+  <div id="retention-preview"></div>
+</div>
+
+</main><!-- /main -->
+
+<!-- ══ Add/Edit DB Modal ═══════════════════════════════ -->
 <div class="modal-backdrop" id="modal-db">
 <div class="modal">
   <div class="modal-title" id="modal-db-title">Add Database</div>
   <input type="hidden" id="db-edit-id">
-
   <div class="form-row">
-    <div class="form-group">
-      <label>Name / Alias</label>
-      <input id="db-name" type="text" placeholder="Production DB">
-    </div>
-    <div class="form-group">
-      <label>DB Type</label>
-      <select id="db-type">
+    <div class="form-group"><label>Name *</label><input id="db-name" type="text" placeholder="Production DB"></div>
+    <div class="form-group"><label>DB Type *</label>
+      <select id="db-type" onchange="handleTypeChange()">
         <option value="postgresql">PostgreSQL</option>
-        <option value="mysql">MySQL</option>
+        <option value="mysql">MySQL / MariaDB</option>
         <option value="oracle">Oracle</option>
       </select>
     </div>
   </div>
   <div class="form-row">
-    <div class="form-group">
-      <label>Host</label>
-      <input id="db-host" type="text" placeholder="192.168.1.10">
-    </div>
-    <div class="form-group">
-      <label>Port</label>
-      <input id="db-port" type="number" placeholder="5432">
-    </div>
+    <div class="form-group"><label>Host *</label><input id="db-host" type="text" placeholder="192.168.1.10"></div>
+    <div class="form-group"><label>Port</label><input id="db-port" type="number" placeholder="5432"></div>
   </div>
   <div class="form-row">
-    <div class="form-group">
-      <label>User</label>
-      <input id="db-user" type="text" placeholder="dbuser">
-    </div>
-    <div class="form-group">
-      <label>Password</label>
-      <input id="db-pass" type="password" placeholder="••••••••">
-    </div>
+    <div class="form-group"><label>User *</label><input id="db-user" type="text" placeholder="dbuser"></div>
+    <div class="form-group"><label>Password</label><input id="db-pass" type="password" placeholder="••••••••"></div>
   </div>
-  <div class="form-group">
-    <label>Database / Schema Name</label>
-    <input id="db-database" type="text" placeholder="mydb">
-  </div>
+  <div class="form-group"><label>Database / Schema *</label><input id="db-database" type="text" placeholder="mydb"></div>
   <div id="oracle-fields" class="hidden">
+    <div class="form-group"><label>Oracle Service Name</label><input id="db-service" type="text" placeholder="ORCL"></div>
+  </div>
+
+  <hr class="section-sep">
+  <div class="section-label" style="margin-bottom:12px">Dump Options</div>
+  <div class="form-row">
+    <div class="form-group"><label>Dump Mode</label>
+      <select id="db-dump-mode">
+        <option value="full">Full (schema + data)</option>
+        <option value="schema_only">Schema only</option>
+        <option value="data_only">Data only</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Format</label>
+      <select id="db-dump-format" onchange="handleFormatChange()">
+        <option value="plain">Plain SQL (.sql)</option>
+        <option value="custom">Custom binary (.dump) — PG only</option>
+        <option value="directory">Directory — PG only</option>
+        <option value="tar">Tar (.tar) — PG only</option>
+      </select>
+    </div>
+  </div>
+  <div id="format-info" class="info-box hidden"></div>
+  <div class="form-row">
+    <div class="form-group"><label>Include Tables (comma-sep)</label><input id="db-include" type="text" placeholder="users, orders"></div>
+    <div class="form-group"><label>Exclude Tables (comma-sep)</label><input id="db-exclude" type="text" placeholder="logs, tmp"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Include Schemas (PG/Oracle)</label><input id="db-include-schemas" type="text" placeholder="public, app"></div>
+    <div class="form-group"><label>Exclude Schemas (PG)</label><input id="db-exclude-schemas" type="text" placeholder="staging"></div>
+  </div>
+  <div class="form-row">
+    <div class="form-group"><label>Compression (0–9)</label><input id="db-compress" type="number" min="0" max="9" value="0"></div>
+    <div class="form-group"><label>Est. DB Size (MB)</label><input id="db-size" type="number" placeholder="500" value="500"></div>
+  </div>
+  <div class="form-row">
     <div class="form-group">
-      <label>Oracle Service Name</label>
-      <input id="db-service" type="text" placeholder="ORCL">
+      <div class="toggle-row" onclick="toggleBool('db-no-owner')"><div class="toggle-sw" id="db-no-owner-sw"></div><div class="toggle-label">--no-owner</div></div>
+    </div>
+    <div class="form-group">
+      <div class="toggle-row" onclick="toggleBool('db-no-acl')"><div class="toggle-sw" id="db-no-acl-sw"></div><div class="toggle-label">--no-acl</div></div>
     </div>
   </div>
 
   <hr class="section-sep">
-  <div class="section-label">Dump Options</div>
-  <div class="form-row">
-    <div class="form-group">
-      <label>Include Tables (comma-sep, empty=all)</label>
-      <input id="db-include" type="text" placeholder="users, orders">
-    </div>
-    <div class="form-group">
-      <label>Exclude Tables (comma-sep)</label>
-      <input id="db-exclude" type="text" placeholder="logs, temp">
-    </div>
-  </div>
-  <div class="form-row">
-    <div class="form-group">
-      <label class="toggle" onclick="toggleOpt('db-no-data')">
-        <span class="toggle-switch" id="db-no-data-sw"></span>
-        Schema only (no data)
-      </label>
-    </div>
-    <div class="form-group">
-      <label class="toggle" onclick="toggleOpt('db-no-schema')">
-        <span class="toggle-switch" id="db-no-schema-sw"></span>
-        Data only (no schema)
-      </label>
-    </div>
-  </div>
-  <div class="form-group">
-    <label>Estimated DB Size (MB) — for disk check</label>
-    <input id="db-size" type="number" placeholder="500" value="500">
-  </div>
-
-  <hr class="section-sep">
-  <div class="section-label">
-    <label class="toggle" style="text-transform:none;font-size:12px;letter-spacing:0" onclick="toggleSSH()">
-      <span class="toggle-switch" id="ssh-toggle-sw"></span>
-      Connect via SSH Tunnel
-    </label>
+  <div class="section-head">
+    <div class="section-label">SSH Connection</div>
+    <div class="toggle-row" onclick="toggleSSH()" style="padding:0"><div class="toggle-sw" id="ssh-toggle-sw"></div><div class="toggle-label">Connect via SSH</div></div>
   </div>
   <div class="ssh-section hidden" id="ssh-fields">
     <div class="form-row">
-      <div class="form-group">
-        <label>SSH Host</label>
-        <input id="db-ssh-host" type="text" placeholder="server.example.com">
-      </div>
-      <div class="form-group">
-        <label>SSH Port</label>
-        <input id="db-ssh-port" type="number" placeholder="22" value="22">
-      </div>
+      <div class="form-group"><label>SSH Host</label><input id="db-ssh-host" type="text" placeholder="server.example.com"></div>
+      <div class="form-group"><label>SSH Port</label><input id="db-ssh-port" type="number" value="22"></div>
     </div>
-    <div class="form-group">
-      <label>SSH User</label>
-      <input id="db-ssh-user" type="text" placeholder="ubuntu">
+    <div class="form-group"><label>SSH User</label><input id="db-ssh-user" type="text" placeholder="ubuntu"></div>
+    <div class="form-row">
+      <div class="form-group"><label>SSH Password</label><input id="db-ssh-pass" type="password" placeholder="••••••••"></div>
+      <div class="form-group"><label>SSH Key Path</label><input id="db-ssh-key" type="text" placeholder="~/.ssh/id_rsa"></div>
     </div>
     <div class="form-row">
-      <div class="form-group">
-        <label>SSH Password</label>
-        <input id="db-ssh-pass" type="password" placeholder="••••••••">
-      </div>
-      <div class="form-group">
-        <label>SSH Key Path (optional)</label>
-        <input id="db-ssh-key" type="text" placeholder="~/.ssh/id_rsa">
+      <div class="form-group"><label>Remote Temp Dir</label><input id="db-remote-tmp" type="text" placeholder="/tmp"></div>
+      <div class="form-group" style="padding-top:4px">
+        <label style="margin-bottom:7px">After download</label>
+        <div class="toggle-row" onclick="toggleBool('db-del-remote')"><div class="toggle-sw on" id="db-del-remote-sw"></div><div class="toggle-label">Delete remote file</div></div>
       </div>
     </div>
   </div>
-
   <div class="modal-footer">
     <button class="btn btn-ghost" onclick="closeModal('modal-db')">Cancel</button>
-    <button class="btn btn-success btn-sm" onclick="testConn()" id="btn-test">Test Connection</button>
+    <button class="btn btn-ghost" id="btn-test" onclick="testConn()" style="border-color:var(--green);color:var(--green)">✓ Test</button>
     <button class="btn btn-primary" onclick="saveDB()">Save</button>
   </div>
 </div>
 </div>
 
-<!-- ── Start Dump Modal ───────────────────────────────── -->
+<!-- ══ Start Dump Modal ════════════════════════════════ -->
 <div class="modal-backdrop" id="modal-dump">
 <div class="modal">
   <div class="modal-title">Start Dump</div>
   <input type="hidden" id="dump-db-id">
   <div class="form-group">
-    <label>Save To</label>
-    <input id="dump-save-path" type="text" placeholder="./dumps">
+    <label>Base Save Path</label>
+    <input id="dump-save-path" type="text" placeholder="./dumps" oninput="updateDumpPathPreview()">
   </div>
-  <div id="dump-disk-check" style="margin-bottom:12px"></div>
+  <div id="dump-disk-check"></div>
   <div class="modal-footer">
     <button class="btn btn-ghost" onclick="closeModal('modal-dump')">Cancel</button>
-    <button class="btn btn-primary" onclick="startDump()">▶ Start Dump</button>
+    <button class="btn btn-primary" onclick="startDump()">▶ Start</button>
   </div>
 </div>
 </div>
 
-<!-- ── Add Schedule Modal ──────────────────────────────── -->
+<!-- ══ Add Schedule Modal ══════════════════════════════ -->
 <div class="modal-backdrop" id="modal-sched">
 <div class="modal">
   <div class="modal-title">Add Schedule</div>
-  <div class="form-group">
-    <label>Database</label>
-    <select id="sched-db-id"></select>
-  </div>
-  <div class="form-group">
-    <label>Cron Expression</label>
-    <input id="sched-cron" type="text" placeholder="0 2 * * *" value="0 2 * * *">
-  </div>
-  <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:12px">
-    Examples: <b>0 2 * * *</b> = daily at 02:00 &nbsp; <b>0 */6 * * *</b> = every 6h &nbsp; <b>0 3 * * 0</b> = weekly Sunday 03:00
-  </div>
-  <div class="form-group">
-    <label>Save To (leave empty for default)</label>
-    <input id="sched-save-path" type="text" placeholder="./dumps">
-  </div>
+  <div class="form-group"><label>Database</label><select id="sched-db-id"></select></div>
+  <div class="form-group"><label>Cron Expression</label><input id="sched-cron" type="text" value="0 2 * * *"></div>
+  <div class="info-box"><b>Examples:</b> <code>0 2 * * *</code> = daily 02:00 &nbsp;•&nbsp; <code>0 */6 * * *</code> = every 6h &nbsp;•&nbsp; <code>0 3 * * 0</code> = Sun 03:00</div>
+  <div class="form-group"><label>Save To (empty = default)</label><input id="sched-save-path" type="text" placeholder="./dumps"></div>
   <div class="modal-footer">
     <button class="btn btn-ghost" onclick="closeModal('modal-sched')">Cancel</button>
-    <button class="btn btn-primary" onclick="addSchedule()">Save Schedule</button>
+    <button class="btn btn-primary" onclick="addSchedule()">Save</button>
+  </div>
+</div>
+</div>
+
+<!-- ══ Verify Modal ════════════════════════════════════ -->
+<div class="modal-backdrop" id="modal-verify">
+<div class="modal">
+  <div class="modal-title">Dump Verification</div>
+  <div id="verify-body"><div style="color:var(--muted);text-align:center;padding:20px">Running checks…</div></div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('modal-verify')">Close</button>
   </div>
 </div>
 </div>
@@ -565,445 +602,608 @@ select option { background: var(--surface2); }
 
 <script>
 const socket = io();
-let databases = [];
-let schedules = [];
-let history = [];
-let dumpProgress = {};
-let toOpts = {noData: false, noSchema: false, useSSH: false};
+let databases = [], schedules = [], history = [], dumpProgress = {}, bools = {};
+let chartTimeline = null, chartByDb = null;
+
+// ── Toggles ─────────────────────────────────────────────
+function setToggle(key, val) { bools[key] = !!val; const el = document.getElementById(key+'-sw'); if(el) el.classList.toggle('on', !!val); }
+function toggleBool(key) { setToggle(key, !bools[key]); }
+function toggleSSH() { const n = !bools['ssh-toggle']; setToggle('ssh-toggle', n); document.getElementById('ssh-fields').classList.toggle('hidden', !n); }
 
 // ── Navigation ──────────────────────────────────────────
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('page-' + id).classList.add('active');
+  document.getElementById('page-'+id).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n => {
-    if (n.textContent.toLowerCase().includes(id === 'dumps' ? 'active' : id.slice(0,4))) n.classList.add('active');
+    const t = n.textContent.trim().toLowerCase();
+    if ((id==='dumps'&&t.includes('active'))||(id!=='dumps'&&t.startsWith(id.slice(0,5)))) n.classList.add('active');
   });
-  if (id === 'dashboard') refreshDashboard();
-  if (id === 'databases') renderDBs();
-  if (id === 'dumps') renderDumps();
-  if (id === 'schedules') renderSchedules();
-  if (id === 'history') renderHistory();
-  if (id === 'settings') loadSettings();
+  ({
+    dashboard: refreshDashboard, databases: renderDBs, dumps: renderDumps,
+    schedules: renderSchedules, history: renderHistory,
+    settings: loadSettings, notifications: loadNotifications, retention: loadRetention,
+  }[id] || (()=>{}))();
 }
 
 // ── Toast ────────────────────────────────────────────────
 function toast(msg, type='ok') {
   const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'show ' + type;
-  setTimeout(() => t.className = '', 3000);
+  t.textContent = msg; t.className = 'show '+type;
+  clearTimeout(t._t); t._t = setTimeout(()=>t.className='', 3500);
 }
 
 // ── API ──────────────────────────────────────────────────
 async function api(method, url, body) {
-  const res = await fetch(url, {
-    method, headers: {'Content-Type':'application/json'},
-    body: body ? JSON.stringify(body) : undefined
-  });
+  const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: body ? JSON.stringify(body) : undefined });
   return res.json();
 }
 
-// ── Socket.IO progress ───────────────────────────────────
+// ── Socket.IO ────────────────────────────────────────────
 socket.on('progress', data => {
   dumpProgress[data.dump_id] = data;
-  renderDumps();
-  if (data.status === 'done') { loadHistory(); updateStats(); }
+  renderDumps(); updateDumpBadge();
+  if (data.status === 'done' || data.status === 'error') { loadHistory(); refreshStats(); }
 });
 
 // ── Dashboard ────────────────────────────────────────────
 async function refreshDashboard() {
-  const [dbs, hist, scheds] = await Promise.all([
-    api('GET', '/api/databases'),
-    api('GET', '/api/history'),
-    api('GET', '/api/schedules')
-  ]);
-  databases = dbs; history = hist; schedules = scheds;
-  document.getElementById('stat-dbs').textContent = dbs.length;
-  document.getElementById('stat-done').textContent = hist.length;
+  const [dbs, scheds] = await Promise.all([api('GET','/api/databases'), api('GET','/api/schedules')]);
+  databases = dbs; schedules = scheds;
+  document.getElementById('stat-dbs').textContent   = dbs.length;
   document.getElementById('stat-sched').textContent = scheds.filter(s=>s.enabled).length;
-  renderDashHistory();
-  refreshDisk();
+  await refreshStats();
+  await refreshDisk();
+  await renderDashHistory();
+  loadEncryptionStatus();
+}
+
+async function refreshStats() {
+  const s = await api('GET','/api/stats');
+  document.getElementById('stat-done').textContent = s.done;
+  document.getElementById('stat-rate').textContent = s.total ? s.success_rate+'%' : '—';
+
+  // Timeline chart
+  const labels = s.timeline.map(d => d.date);
+  const sizes  = s.timeline.map(d => d.size_mb);
+  if (chartTimeline) chartTimeline.destroy();
+  const ctx1 = document.getElementById('chart-timeline').getContext('2d');
+  chartTimeline = new Chart(ctx1, {
+    type: 'line',
+    data: { labels, datasets: [{ label: 'Size MB', data: sizes, borderColor: '#3b6ef5',
+      backgroundColor: 'rgba(59,110,245,.08)', fill: true, tension: .3, pointRadius: 3 }] },
+    options: { responsive: true, plugins: { legend: { display: false } },
+      scales: { x: { ticks: { font: { size: 10 } } }, y: { ticks: { font: { size: 10 } } } } }
+  });
+
+  // By DB chart — grouped bars: Min / Max / Last
+  if (chartByDb) chartByDb.destroy();
+  const ctx2 = document.getElementById('chart-bydb').getContext('2d');
+  const MB = v => parseFloat((v / 1048576).toFixed(2));
+  const dbLabels = s.by_db.map(d => d.name);
+  chartByDb = new Chart(ctx2, {
+    type: 'bar',
+    data: {
+      labels: dbLabels,
+      datasets: [
+        {
+          label: 'Min',
+          data: s.by_db.map(d => MB(d.min_size)),
+          backgroundColor: 'rgba(14,162,113,.55)',
+          borderColor: '#0ea271', borderWidth: 1,
+        },
+        {
+          label: 'Last',
+          data: s.by_db.map(d => MB(d.last_size)),
+          backgroundColor: 'rgba(59,110,245,.7)',
+          borderColor: '#3b6ef5', borderWidth: 1,
+        },
+        {
+          label: 'Max',
+          data: s.by_db.map(d => MB(d.max_size)),
+          backgroundColor: 'rgba(208,138,0,.55)',
+          borderColor: '#d08a00', borderWidth: 1,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} MB`,
+            afterBody: (items) => {
+              const db = s.by_db[items[0].dataIndex];
+              return [`Dumps: ${db.count}`, `Avg: ${MB(db.total_size / db.count)} MB`];
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { font: { size: 10 }, maxRotation: 30 } },
+        y: { ticks: { font: { size: 10 } }, title: { display: true, text: 'MB', font: { size: 10 } } }
+      }
+    }
+  });
 }
 
 async function refreshDisk() {
-  const settings = await api('GET', '/api/settings');
-  const path = settings.default_save_path || './dumps';
-  const d = await api('POST', '/api/disk', {path});
-  if (d.ok) {
-    document.getElementById('disk-bar').style.width = d.percent + '%';
-    document.getElementById('disk-bar').className = 'disk-gauge-fill' + (d.percent > 90 ? ' danger' : d.percent > 75 ? ' warn' : '');
-    document.getElementById('disk-used').textContent = `Used: ${d.used_gb} GB`;
-    document.getElementById('disk-free').textContent = `Free: ${d.free_gb} GB`;
-    document.getElementById('disk-total').textContent = `Total: ${d.total_gb} GB`;
-  }
+  const settings = await api('GET','/api/settings');
+  const path = settings.default_save_path || '.';
+  const d = await api('POST','/api/disk',{path});
+  if (!d.ok) return;
+  const bar = document.getElementById('disk-bar');
+  bar.style.width = d.percent+'%';
+  bar.className = 'disk-bar-fill' + (d.percent>90?' danger':d.percent>75?' warn':'');
+  document.getElementById('disk-used').textContent  = 'Used: '+d.used_gb+' GB';
+  document.getElementById('disk-free').textContent  = 'Free: '+d.free_gb+' GB';
+  document.getElementById('disk-total').textContent = 'Total: '+d.total_gb+' GB';
 }
 
-function updateStats() {
-  document.getElementById('stat-done').textContent = history.length;
-}
-
-function renderDashHistory() {
+async function renderDashHistory() {
+  const hist = await api('GET','/api/history');
+  history = hist;
   const el = document.getElementById('dash-history');
-  if (!history.length) { el.innerHTML = '<div class="empty-state" style="padding:20px">No dumps yet.</div>'; return; }
-  el.innerHTML = history.slice(0,5).map(h => `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
-      <span style="font-size:12px;font-family:var(--mono)">${h.filename}</span>
-      <span style="font-size:11px;color:var(--muted)">${formatDate(h.created_at)}</span>
-    </div>
-  `).join('');
+  if (!hist.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:10px 0">No dumps yet.</div>'; return; }
+  el.innerHTML = hist.slice(0,6).map(h => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:12px;font-family:var(--mono);color:var(--text2)">${h.filename}</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="pill ${h.status}">${h.status}</span>
+        <span style="font-size:11px;color:var(--muted)">${fmtDate(h.created_at)}</span>
+      </div>
+    </div>`).join('');
+}
+
+function updateDumpBadge() {
+  const n = Object.values(dumpProgress).filter(d=>d.status==='running').length;
+  const b = document.getElementById('badge-dumps');
+  b.style.display = n ? '' : 'none'; b.textContent = n;
+}
+
+function loadEncryptionStatus() {
+  fetch('/api/settings').then(r=>r.json()).then(() => {
+    const el = document.getElementById('enc-status');
+    if (el) el.innerHTML = '<span style="color:var(--green);font-weight:600">🔒 Passwords encrypted</span> — stored in config.json using Fernet symmetric encryption. Key: <code style="font-family:var(--mono);font-size:11px">.secret.key</code>';
+  });
 }
 
 // ── Databases ────────────────────────────────────────────
-async function loadDBs() {
-  databases = await api('GET', '/api/databases');
-}
+async function loadDBs() { databases = await api('GET','/api/databases'); }
 
 function renderDBs() {
   loadDBs().then(() => {
     const el = document.getElementById('db-list');
-    if (!databases.length) {
-      el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg><br>No databases. Click "Add Database".</div>';
-      return;
-    }
+    if (!databases.length) { el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>No databases. Click "Add Database".</div>'; return; }
     el.innerHTML = databases.map(db => {
-      const badgeClass = {postgresql:'pg', mysql:'my', oracle:'or'}[db.type] || 'pg';
-      const badgeText = {postgresql:'PG', mysql:'MY', oracle:'OR'}[db.type] || '?';
+      const cls = {postgresql:'pg',mysql:'my',oracle:'or'}[db.type]||'pg';
+      const lbl = {postgresql:'PG',mysql:'MY',oracle:'OR'}[db.type]||'?';
+      const port = db.port || {postgresql:5432,mysql:3306,oracle:1521}[db.type];
       return `
       <div class="db-item">
-        <div class="db-badge ${badgeClass}">${badgeText}</div>
+        <div class="db-badge ${cls}">${lbl}</div>
         <div class="db-info">
-          <div class="db-name">${db.name}</div>
-          <div class="db-host">${db.user}@${db.host}:${db.port||defaultPort(db.type)} / ${db.database}</div>
+          <div class="db-name">${db.name}
+            ${db.use_ssh?'<span class="format-badge badge-ssh">SSH</span>':''}
+            <span class="format-badge">${db.dump_format||'plain'}</span>
+            <span class="format-badge">${db.dump_mode||'full'}</span>
+          </div>
+          <div class="db-host">${db.user}@${db.host}:${port} / ${db.database}</div>
         </div>
         <div class="db-actions">
           <button class="btn btn-success btn-sm" onclick="openDumpModal('${db.id}')">▶ Dump</button>
-          <button class="btn-icon" title="Edit" onclick="editDB('${db.id}')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </button>
-          <button class="btn-icon" title="Delete" onclick="deleteDB('${db.id}')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
-          </button>
+          <button class="btn-icon" title="Edit" onclick="editDB('${db.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+          <button class="btn-icon" title="Delete" onclick="deleteDB('${db.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
         </div>
       </div>`;
     }).join('');
   });
 }
 
-function defaultPort(type) {
-  return {postgresql:5432, mysql:3306, oracle:1521}[type] || '';
+const FORMAT_INFO = {
+  custom:    '⚡ Custom binary — PG only. Smallest size, fastest restore with pg_restore.',
+  directory: '📁 Directory — PG only. One file per table. Supports parallel dump.',
+  tar:       '📦 Tar — PG only. Compatible with pg_restore.',
+};
+function handleFormatChange() {
+  const fmt = document.getElementById('db-dump-format').value;
+  const box = document.getElementById('format-info');
+  if (FORMAT_INFO[fmt]) { box.textContent = FORMAT_INFO[fmt]; box.classList.remove('hidden'); }
+  else box.classList.add('hidden');
+}
+function handleTypeChange() {
+  const type = document.getElementById('db-type').value;
+  document.getElementById('db-port').placeholder = {postgresql:5432,mysql:3306,oracle:1521}[type]||'';
+  document.getElementById('oracle-fields').classList.toggle('hidden', type!=='oracle');
+  const fmtSel = document.getElementById('db-dump-format');
+  [...fmtSel.options].forEach(o => o.disabled = type!=='postgresql' && o.value!=='plain');
+  if (type!=='postgresql') fmtSel.value = 'plain';
+  handleFormatChange();
 }
 
-function openAddDB() {
-  clearDBForm();
-  document.getElementById('modal-db-title').textContent = 'Add Database';
-  document.getElementById('db-edit-id').value = '';
-  document.getElementById('modal-db').classList.add('open');
-}
+function openAddDB() { clearDBForm(); document.getElementById('modal-db-title').textContent='Add Database'; document.getElementById('db-edit-id').value=''; document.getElementById('modal-db').classList.add('open'); }
 
-function editDB(id) {
-  const db = databases.find(d => d.id === id);
-  if (!db) return;
+async function editDB(id) {
+  // Load decrypted config from server
+  const db = await api('GET', `/api/databases/raw/${id}`);
   clearDBForm();
   document.getElementById('modal-db-title').textContent = 'Edit Database';
   document.getElementById('db-edit-id').value = db.id;
-  document.getElementById('db-name').value = db.name || '';
-  document.getElementById('db-type').value = db.type || 'postgresql';
-  document.getElementById('db-host').value = db.host || '';
-  document.getElementById('db-port').value = db.port || '';
-  document.getElementById('db-user').value = db.user || '';
-  document.getElementById('db-pass').value = db.password || '';
-  document.getElementById('db-database').value = db.database || '';
-  document.getElementById('db-service').value = db.service_name || '';
-  document.getElementById('db-include').value = (db.include_tables||[]).join(', ');
-  document.getElementById('db-exclude').value = (db.exclude_tables||[]).join(', ');
-  document.getElementById('db-size').value = db.estimated_size_mb || 500;
-  setToggle('db-no-data', db.no_data); toOpts.noData = !!db.no_data;
-  setToggle('db-no-schema', db.no_schema); toOpts.noSchema = !!db.no_schema;
+  document.getElementById('db-name').value     = db.name||'';
+  document.getElementById('db-type').value     = db.type||'postgresql';
+  document.getElementById('db-host').value     = db.host||'';
+  document.getElementById('db-port').value     = db.port||'';
+  document.getElementById('db-user').value     = db.user||'';
+  document.getElementById('db-pass').value     = db.password||'';
+  document.getElementById('db-database').value = db.database||'';
+  document.getElementById('db-service').value  = db.service_name||'';
+  document.getElementById('db-include').value  = (db.include_tables||[]).join(', ');
+  document.getElementById('db-exclude').value  = (db.exclude_tables||[]).join(', ');
+  document.getElementById('db-include-schemas').value = (db.include_schemas||[]).join(', ');
+  document.getElementById('db-exclude-schemas').value = (db.exclude_schemas||[]).join(', ');
+  document.getElementById('db-size').value        = db.estimated_size_mb||500;
+  document.getElementById('db-compress').value    = db.compress_level||0;
+  document.getElementById('db-dump-mode').value   = db.dump_mode||'full';
+  document.getElementById('db-dump-format').value = db.dump_format||'plain';
+  setToggle('db-no-owner', db.no_owner); setToggle('db-no-acl', db.no_acl);
+  setToggle('db-del-remote', db.delete_remote_after!==false);
   if (db.use_ssh) {
-    toOpts.useSSH = true; setToggle('ssh-toggle', true);
-    document.getElementById('ssh-fields').classList.remove('hidden');
-    document.getElementById('db-ssh-host').value = db.ssh_host || '';
-    document.getElementById('db-ssh-port').value = db.ssh_port || 22;
-    document.getElementById('db-ssh-user').value = db.ssh_user || '';
-    document.getElementById('db-ssh-pass').value = db.ssh_password || '';
-    document.getElementById('db-ssh-key').value = db.ssh_key || '';
+    setToggle('ssh-toggle', true); document.getElementById('ssh-fields').classList.remove('hidden');
+    document.getElementById('db-ssh-host').value  = db.ssh_host||'';
+    document.getElementById('db-ssh-port').value  = db.ssh_port||22;
+    document.getElementById('db-ssh-user').value  = db.ssh_user||'';
+    document.getElementById('db-ssh-pass').value  = db.ssh_password||'';
+    document.getElementById('db-ssh-key').value   = db.ssh_key||'';
+    document.getElementById('db-remote-tmp').value = db.remote_tmp_dir||'';
   }
-  handleTypeChange();
+  handleTypeChange(); handleFormatChange();
   document.getElementById('modal-db').classList.add('open');
 }
 
 function clearDBForm() {
-  ['db-name','db-host','db-port','db-user','db-pass','db-database','db-service','db-include','db-exclude','db-ssh-host','db-ssh-user','db-ssh-pass','db-ssh-key'].forEach(id => {
-    document.getElementById(id).value = '';
-  });
-  document.getElementById('db-port').placeholder = '5432';
-  document.getElementById('db-size').value = 500;
-  document.getElementById('db-ssh-port').value = 22;
-  toOpts = {noData:false, noSchema:false, useSSH:false};
-  setToggle('db-no-data', false); setToggle('db-no-schema', false); setToggle('ssh-toggle', false);
+  ['db-name','db-host','db-port','db-user','db-pass','db-database','db-service','db-include','db-exclude','db-include-schemas','db-exclude-schemas','db-ssh-host','db-ssh-user','db-ssh-pass','db-ssh-key','db-remote-tmp'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('db-ssh-port').value=22; document.getElementById('db-size').value=500; document.getElementById('db-compress').value=0;
+  document.getElementById('db-dump-mode').value='full'; document.getElementById('db-dump-format').value='plain';
+  document.getElementById('format-info').classList.add('hidden');
+  ['db-no-owner','db-no-acl','ssh-toggle'].forEach(k=>setToggle(k,false));
+  setToggle('db-del-remote',true);
   document.getElementById('ssh-fields').classList.add('hidden');
   document.getElementById('oracle-fields').classList.add('hidden');
 }
 
-document.getElementById('db-type').addEventListener('change', handleTypeChange);
-function handleTypeChange() {
-  const type = document.getElementById('db-type').value;
-  const ports = {postgresql:5432, mysql:3306, oracle:1521};
-  document.getElementById('db-port').placeholder = ports[type];
-  document.getElementById('oracle-fields').classList.toggle('hidden', type !== 'oracle');
-}
-
-function toggleOpt(key) {
-  if (key === 'db-no-data') { toOpts.noData = !toOpts.noData; setToggle(key, toOpts.noData); }
-  if (key === 'db-no-schema') { toOpts.noSchema = !toOpts.noSchema; setToggle(key, toOpts.noSchema); }
-}
-function toggleSSH() {
-  toOpts.useSSH = !toOpts.useSSH;
-  setToggle('ssh-toggle', toOpts.useSSH);
-  document.getElementById('ssh-fields').classList.toggle('hidden', !toOpts.useSSH);
-}
-function setToggle(key, val) {
-  const sw = document.getElementById(key + '-sw');
-  if (sw) sw.classList.toggle('on', !!val);
-}
+const parseList = id => (document.getElementById(id).value||'').split(',').map(s=>s.trim()).filter(Boolean);
+const getDBForm = () => ({
+  type:db_type(), host:v('db-host'), port:v('db-port')||null, user:v('db-user'),
+  password:v('db-pass'), database:v('db-database'), service_name:v('db-service'),
+  include_tables:parseList('db-include'), exclude_tables:parseList('db-exclude'),
+  include_schemas:parseList('db-include-schemas'), exclude_schemas:parseList('db-exclude-schemas'),
+  dump_mode:v('db-dump-mode'), dump_format:v('db-dump-format'),
+  compress_level:parseInt(v('db-compress'))||0,
+  no_owner:!!bools['db-no-owner'], no_acl:!!bools['db-no-acl'],
+  estimated_size_mb:parseInt(v('db-size'))||500,
+  use_ssh:!!bools['ssh-toggle'],
+  ssh_host:v('db-ssh-host'), ssh_port:parseInt(v('db-ssh-port'))||22,
+  ssh_user:v('db-ssh-user'), ssh_password:v('db-ssh-pass'),
+  ssh_key:v('db-ssh-key'), remote_tmp_dir:v('db-remote-tmp'),
+  delete_remote_after:bools['db-del-remote']!==false,
+});
+const v = id => document.getElementById(id).value;
+const db_type = () => document.getElementById('db-type').value;
 
 async function testConn() {
-  const id = document.getElementById('db-edit-id').value;
-  if (!id) { toast('Save the database first', 'err'); return; }
   const btn = document.getElementById('btn-test');
-  btn.textContent = 'Testing...'; btn.disabled = true;
-  const r = await api('POST', `/api/databases/${id}/test`);
-  btn.textContent = 'Test Connection'; btn.disabled = false;
-  toast(r.message, r.ok ? 'ok' : 'err');
+  btn.textContent='Testing…'; btn.disabled=true;
+  const cfg = getDBForm();
+  cfg.name = v('db-name'); cfg.id = v('db-edit-id')||'temp';
+  if (!cfg.host||!cfg.user||!cfg.database) { toast('Fill Host, User, Database first','err'); btn.textContent='✓ Test'; btn.disabled=false; return; }
+  const r = await api('POST', `/api/databases/${cfg.id}/test`, cfg);
+  btn.textContent='✓ Test'; btn.disabled=false;
+  toast(r.message, r.ok?'ok':'err');
 }
 
 async function saveDB() {
-  const id = document.getElementById('db-edit-id').value;
-  const incl = document.getElementById('db-include').value.split(',').map(s=>s.trim()).filter(Boolean);
-  const excl = document.getElementById('db-exclude').value.split(',').map(s=>s.trim()).filter(Boolean);
-  const data = {
-    name: document.getElementById('db-name').value,
-    type: document.getElementById('db-type').value,
-    host: document.getElementById('db-host').value,
-    port: parseInt(document.getElementById('db-port').value) || null,
-    user: document.getElementById('db-user').value,
-    password: document.getElementById('db-pass').value,
-    database: document.getElementById('db-database').value,
-    service_name: document.getElementById('db-service').value,
-    include_tables: incl, exclude_tables: excl,
-    no_data: toOpts.noData, no_schema: toOpts.noSchema,
-    estimated_size_mb: parseInt(document.getElementById('db-size').value) || 500,
-    use_ssh: toOpts.useSSH,
-    ssh_host: document.getElementById('db-ssh-host').value,
-    ssh_port: parseInt(document.getElementById('db-ssh-port').value) || 22,
-    ssh_user: document.getElementById('db-ssh-user').value,
-    ssh_password: document.getElementById('db-ssh-pass').value,
-    ssh_key: document.getElementById('db-ssh-key').value,
-  };
-  if (!data.name || !data.host || !data.user || !data.database) { toast('Fill required fields', 'err'); return; }
-  if (id) { await api('PUT', `/api/databases/${id}`, data); } else { await api('POST', '/api/databases', data); }
-  closeModal('modal-db');
-  renderDBs();
-  toast('Database saved');
+  const id = v('db-edit-id');
+  const data = { name: v('db-name'), ...getDBForm() };
+  if (!data.name||!data.host||!data.user||!data.database) { toast('Fill required fields','err'); return; }
+  if (id) await api('PUT', `/api/databases/${id}`, data);
+  else    await api('POST', '/api/databases', data);
+  closeModal('modal-db'); renderDBs(); toast('Database saved');
 }
 
 async function deleteDB(id) {
   if (!confirm('Delete this database config?')) return;
-  await api('DELETE', `/api/databases/${id}`);
-  renderDBs();
-  toast('Deleted');
+  await api('DELETE', `/api/databases/${id}`); renderDBs(); toast('Deleted');
 }
 
 // ── Dump ─────────────────────────────────────────────────
 async function openDumpModal(dbId) {
-  const settings = await api('GET', '/api/settings');
+  const [s, diskCheck] = await Promise.all([
+    api('GET', '/api/settings'),
+    Promise.resolve(null),
+  ]);
+  const basePath = s.default_save_path || './dumps';
+  const db = databases.find(d => d.id === dbId) || {};
+  const safeName = (db.database || 'dump').replace(/[^a-zA-Z0-9\-_.]/g, '_');
+  const fullPath = basePath.replace(/[/\\]$/, '') + '/' + safeName;
+
   document.getElementById('dump-db-id').value = dbId;
-  document.getElementById('dump-save-path').value = settings.default_save_path || './dumps';
-  document.getElementById('dump-disk-check').innerHTML = '';
+  document.getElementById('dump-save-path').value = basePath;
+  document.getElementById('dump-disk-check').innerHTML =
+    `<div class="info-box" style="margin:8px 0 0">
+       📁 Dumps will be saved to: <code style="font-family:var(--mono);font-size:11px">${fullPath}/</code>
+     </div>`;
+
+  // Also check disk space in background
+  api('POST', '/api/disk', {path: basePath}).then(d => {
+    if (!d.ok) return;
+    const pct = d.percent;
+    const color = pct > 90 ? 'var(--red)' : pct > 75 ? 'var(--yellow)' : 'var(--green)';
+    const el = document.getElementById('dump-disk-check');
+    if (el) el.innerHTML += `
+      <div style="margin-top:6px;font-size:11px;font-family:var(--mono);color:var(--text2)">
+        💾 Disk: <span style="color:${color};font-weight:600">${d.free_gb} GB free</span>
+        of ${d.total_gb} GB (${pct}% used)
+      </div>`;
+  });
+
   document.getElementById('modal-dump').classList.add('open');
 }
-
 async function startDump() {
+  const dbId = v('dump-db-id');
+  const sp   = v('dump-save-path');
+  const r = await api('POST','/api/dump/start',{db_id:dbId, save_path:sp});
+  if (r.ok) { closeModal('modal-dump'); showPage('dumps'); toast('Dump started!'); }
+  else toast(r.message||'Error','err');
+}
+
+function updateDumpPathPreview() {
   const dbId = document.getElementById('dump-db-id').value;
-  const savePath = document.getElementById('dump-save-path').value;
-  const r = await api('POST', '/api/dump/start', {db_id: dbId, save_path: savePath});
-  if (r.ok) {
-    closeModal('modal-dump');
-    showPage('dumps');
-    toast('Dump started!');
-  } else {
-    toast(r.message || 'Error', 'err');
+  const basePath = v('dump-save-path') || './dumps';
+  const db = databases.find(d => d.id === dbId) || {};
+  const safeName = (db.database || 'dump').replace(/[^a-zA-Z0-9\-_.]/g, '_');
+  const fullPath = basePath.replace(/[/\\]$/, '') + '/' + safeName;
+  const el = document.getElementById('dump-disk-check');
+  if (el) {
+    el.innerHTML = `<div class="info-box" style="margin:8px 0 0">
+      📁 Dumps will be saved to: <code style="font-family:var(--mono);font-size:11px">${fullPath}/</code>
+    </div>`;
   }
+}
+
+async function cancelDump(dumpId) {
+  const r = await api('POST', `/api/dump/cancel/${dumpId}`);
+  toast(r.message, r.ok?'ok':'err');
 }
 
 function renderDumps() {
   const el = document.getElementById('dump-list');
   const entries = Object.entries(dumpProgress);
-  if (!entries.length) {
-    el.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><br>No active dumps.</div>';
-    return;
-  }
-  el.innerHTML = entries.reverse().map(([id, d]) => `
-    <div class="dump-card ${d.status}">
-      <div class="dump-header">
-        <div>
-          <div class="dump-name">${d.filename || id.slice(0,8)+'...'}</div>
-          <div class="dump-msg">${d.message || ''}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <span class="dump-status ${d.status}">${d.status}</span>
-          ${d.status === 'done' ? `<button class="btn btn-success btn-sm" onclick="downloadDump('${id}')">⬇ Download</button>` : ''}
-        </div>
-      </div>
-      <div class="progress-bar-wrap">
-        <div class="progress-bar ${d.status}" style="width:${d.percent||0}%"></div>
-      </div>
-      <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:4px">
-        ${d.percent||0}% ${d.size ? '• ' + formatBytes(d.size) : ''}
-        ${d.started_at ? '• Started: ' + formatDate(d.started_at) : ''}
-      </div>
-    </div>
-  `).join('');
-}
-
-function downloadDump(id) {
-  window.location.href = `/api/dump/download/${id}`;
-}
-
-// ── Schedules ────────────────────────────────────────────
-async function loadSchedules() {
-  schedules = await api('GET', '/api/schedules');
-}
-
-async function renderSchedules() {
-  await loadDBs(); await loadSchedules();
-  const el = document.getElementById('sched-list');
-  if (!schedules.length) { el.innerHTML = '<div class="empty-state">No schedules. Add one.</div>'; return; }
-  const dbMap = Object.fromEntries(databases.map(d => [d.id, d]));
-  el.innerHTML = schedules.map(s => {
-    const db = dbMap[s.db_id];
+  if (!entries.length) { el.innerHTML='<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>No dumps yet.</div>'; return; }
+  el.innerHTML = [...entries].reverse().map(([id, d]) => {
+    const status = d.status||'pending';
+    const pct    = d.percent||0;
+    const verifyBadge = d.verify ? `<span class="pill ${d.verify.ok?'ok':'warn'}">${d.verify.ok?'verified':'⚠ verify'}</span>` : '';
     return `
-    <div class="sched-item">
-      <div style="flex:1">
-        <div class="sched-cron">${s.cron}</div>
-        <div class="sched-db">${db ? db.name : 'Unknown DB'} → ${s.save_path || 'default'}</div>
+    <div class="dump-card ${status}">
+      <div class="dump-header">
+        <div style="min-width:0;flex:1">
+          <div class="dump-name">${d.filename||('dump-'+id.slice(0,8))}</div>
+          <div class="dump-msg">${d.message||''}</div>
+        </div>
+        <div class="dump-right">
+          ${verifyBadge}
+          <span class="pill ${status}">${status}</span>
+          ${status==='running'?`<button class="btn btn-warn btn-sm" onclick="cancelDump('${id}')">✕ Stop</button>`:''}
+          ${status==='done'?`<button class="btn btn-success btn-sm" onclick="downloadDump('${id}')">⬇ Download</button>`:''}
+        </div>
       </div>
-      <label class="toggle" onclick="toggleSched('${s.id}')">
-        <span class="toggle-switch ${s.enabled ? 'on' : ''}"></span>
-      </label>
-      <button class="btn-icon" onclick="deleteSched('${s.id}')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-      </button>
+      <div class="progress-wrap"><div class="progress-fill ${status}" style="width:${pct}%"></div></div>
+      <div class="dump-meta">
+        <span>${pct}%</span>
+        ${d.size?`<span>${fmtBytes(d.size)}</span>`:''}
+        ${d.started_at?`<span>Started: ${fmtDate(d.started_at)}</span>`:''}
+        ${d.finished_at?`<span>Finished: ${fmtDate(d.finished_at)}</span>`:''}
+      </div>
     </div>`;
   }).join('');
 }
 
-async function openAddSchedule() {
-  await loadDBs();
-  const sel = document.getElementById('sched-db-id');
-  sel.innerHTML = databases.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
-  document.getElementById('modal-sched').classList.add('open');
-}
+function downloadDump(id) { window.location.href = `/api/dump/download/${id}`; }
 
-async function addSchedule() {
-  const data = {
-    db_id: document.getElementById('sched-db-id').value,
-    cron: document.getElementById('sched-cron').value,
-    save_path: document.getElementById('sched-save-path').value,
-  };
-  if (!data.cron) { toast('Enter cron expression', 'err'); return; }
-  const r = await api('POST', '/api/schedules', data);
-  if (r.ok) { closeModal('modal-sched'); renderSchedules(); toast('Schedule added'); }
-  else toast(r.message || 'Error', 'err');
-}
-
-async function toggleSched(id) {
-  await api('POST', `/api/schedules/${id}/toggle`);
-  renderSchedules();
-}
-
-async function deleteSched(id) {
-  if (!confirm('Delete schedule?')) return;
-  await api('DELETE', `/api/schedules/${id}`);
-  renderSchedules();
-  toast('Deleted');
-}
-
-// ── History ──────────────────────────────────────────────
-async function loadHistory() { history = await api('GET', '/api/history'); }
-
+// ── History ───────────────────────────────────────────────
+async function loadHistory() { history = await api('GET','/api/history'); }
 async function renderHistory() {
   await loadHistory();
   const tb = document.getElementById('history-tbody');
-  if (!history.length) { tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:24px">No history yet.</td></tr>'; return; }
-  tb.innerHTML = history.map(h => `
+  if (!history.length) { tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:24px">No history yet.</td></tr>'; return; }
+  tb.innerHTML = history.map(h => {
+    const v = h.verify;
+    const vBadge = v ? `<span class="pill ${v.ok?'ok':'warn'}" title="${v.summary}">${v.ok?'✓ ok':'⚠'}</span>` : `<button class="btn btn-ghost btn-sm" onclick="runVerify('${h.dump_id}')">Verify</button>`;
+    return `
     <tr>
-      <td>${h.db_name || '—'}</td>
-      <td>${h.filename}</td>
-      <td>${formatBytes(h.size)}</td>
-      <td>${formatDate(h.created_at)}</td>
-      <td><span class="dump-status ${h.status}">${h.status}</span></td>
-      <td style="display:flex;gap:6px;padding:8px 12px">
-        ${h.status === 'done' ? `<button class="btn btn-success btn-sm" onclick="window.location.href='/api/history/download/${h.filename}'">⬇</button>` : ''}
+      <td>${h.db_name||'—'}</td>
+      <td class="mono">
+        <div>${h.filename}</div>
+        ${h.filepath ? `<div style="font-size:10px;color:var(--muted);margin-top:2px" title="${h.filepath}">📁 ${h.filepath.replace(/\\/g,'/').split('/').slice(0,-1).join('/').slice(-40) || '.'}</div>` : ''}
+      </td>
+      <td class="mono">${fmtBytes(h.size)}</td>
+      <td class="mono">${fmtDate(h.created_at)}</td>
+      <td><span class="pill ${h.status}">${h.status}</span></td>
+      <td>${vBadge}</td>
+      <td style="display:flex;gap:5px;padding:7px 12px">
+        ${h.status==='done'?`<button class="btn btn-success btn-sm" onclick="window.location.href='/api/history/download/${h.filename}'">⬇</button>`:''}
         <button class="btn btn-danger btn-sm" onclick="deleteHistory('${h.dump_id}')">✕</button>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
-async function deleteHistory(id) {
-  await api('DELETE', `/api/history/${id}`);
+async function runVerify(dumpId) {
+  document.getElementById('verify-body').innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px">Running checks…</div>';
+  document.getElementById('modal-verify').classList.add('open');
+  const r = await api('POST', `/api/history/item/${dumpId}/verify`);
+  if (!r.ok) { document.getElementById('verify-body').innerHTML = `<div style="color:var(--red)">${r.message}</div>`; return; }
+  const res = r.result;
+  const checks = (res.checks||[]).map(c => `
+    <div class="check-item">
+      <div class="check-icon ${c.ok?'ok':'fail'}">${c.ok?'✓':'✗'}</div>
+      <div><div class="check-name">${c.name}</div><div class="check-detail">${c.detail}</div></div>
+    </div>`).join('');
+  document.getElementById('verify-body').innerHTML = `
+    <div class="pill ${res.ok?'ok':'warn'}" style="font-size:12px;margin-bottom:12px">${res.summary}</div>
+    <div class="check-list">${checks}</div>`;
   renderHistory();
 }
 
-// ── Settings ─────────────────────────────────────────────
+async function deleteHistory(id) { await api('DELETE',`/api/history/item/${id}`); renderHistory(); }
+
+// ── Schedules ─────────────────────────────────────────────
+async function loadSchedules() { schedules = await api('GET','/api/schedules'); }
+async function renderSchedules() {
+  await loadDBs(); await loadSchedules();
+  const el = document.getElementById('sched-list');
+  if (!schedules.length) { el.innerHTML='<div class="empty-state">No schedules. Click "Add Schedule".</div>'; return; }
+  const dbMap = Object.fromEntries(databases.map(d=>[d.id,d]));
+  el.innerHTML = schedules.map(s => {
+    const db = dbMap[s.db_id];
+    return `<div class="sched-item">
+      <div class="sched-info"><div class="sched-cron">${s.cron}</div><div class="sched-db">${db?db.name:'?'} → ${s.save_path||'default'}</div></div>
+      <div class="toggle-row" onclick="toggleSched('${s.id}')" style="padding:0"><div class="toggle-sw ${s.enabled?'on':''}" id="sched-sw-${s.id}"></div></div>
+      <button class="btn-icon" onclick="deleteSched('${s.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+    </div>`;
+  }).join('');
+}
+async function openAddSchedule() {
+  await loadDBs();
+  document.getElementById('sched-db-id').innerHTML = databases.map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
+  document.getElementById('modal-sched').classList.add('open');
+}
+async function addSchedule() {
+  const data = { db_id:v('sched-db-id'), cron:v('sched-cron'), save_path:v('sched-save-path') };
+  if (!data.cron) { toast('Enter cron expression','err'); return; }
+  const r = await api('POST','/api/schedules',data);
+  if (r.ok) { closeModal('modal-sched'); renderSchedules(); toast('Schedule added'); }
+  else toast(r.message||'Error','err');
+}
+async function toggleSched(id) {
+  const r = await api('POST',`/api/schedules/${id}/toggle`);
+  if (r.ok) { const sw=document.getElementById('sched-sw-'+id); if(sw) sw.classList.toggle('on',r.enabled); }
+}
+async function deleteSched(id) { if(!confirm('Delete?')) return; await api('DELETE',`/api/schedules/${id}`); renderSchedules(); }
+
+// ── Settings ──────────────────────────────────────────────
 async function loadSettings() {
-  const s = await api('GET', '/api/settings');
-  document.getElementById('s-save-path').value = s.default_save_path || './dumps';
-  document.getElementById('s-max-history').value = s.max_history || 100;
+  const s = await api('GET','/api/settings');
+  document.getElementById('s-save-path').value   = s.default_save_path||'./dumps';
+  document.getElementById('s-max-history').value = s.max_history||100;
+  setToggle('s-auto-verify', s.auto_verify);
 }
-
 async function saveSettings() {
-  const data = {
-    default_save_path: document.getElementById('s-save-path').value,
-    max_history: parseInt(document.getElementById('s-max-history').value) || 100,
-  };
-  await api('POST', '/api/settings', data);
-  toast('Settings saved');
+  const existing = await api('GET','/api/settings');
+  const data = { ...existing, default_save_path: v('s-save-path'), max_history: parseInt(v('s-max-history'))||100, auto_verify: !!bools['s-auto-verify'] };
+  await api('POST','/api/settings',data); toast('Settings saved');
 }
-
 async function checkDiskCustom() {
-  const path = document.getElementById('s-disk-path').value;
-  if (!path) { toast('Enter a path', 'err'); return; }
-  const d = await api('POST', '/api/disk', {path});
+  const path = v('s-disk-path');
+  if (!path) { toast('Enter a path','err'); return; }
+  const d = await api('POST','/api/disk',{path});
   const el = document.getElementById('s-disk-result');
-  if (d.ok) el.innerHTML = `<span style="color:var(--green)">✓</span> Total: ${d.total_gb}GB | Used: ${d.used_gb}GB | Free: ${d.free_gb}GB (${d.percent}%)`;
-  else el.innerHTML = `<span style="color:var(--red)">✗ ${d.message}</span>`;
+  el.innerHTML = d.ok
+    ? `<span style="color:var(--green)">✓</span>  Total: ${d.total_gb} GB  |  Used: ${d.used_gb} GB  |  Free: ${d.free_gb} GB  (${d.percent}%)`
+    : `<span style="color:var(--red)">✗  ${d.message}</span>`;
 }
 
-// ── Modal ────────────────────────────────────────────────
+// ── Notifications ─────────────────────────────────────────
+async function loadNotifications() {
+  const s = await api('GET','/api/settings');
+  const n = s.notifications||{};
+  setToggle('n-enabled', n.enabled);
+  const em = n.email||{}; setToggle('n-email', em.enabled);
+  document.getElementById('n-smtp-host').value = em.smtp_host||'smtp.gmail.com';
+  document.getElementById('n-smtp-port').value = em.smtp_port||587;
+  document.getElementById('n-smtp-user').value = em.smtp_user||'';
+  document.getElementById('n-smtp-pass').value = em.smtp_password||'';
+  document.getElementById('n-email-to').value  = em.to||'';
+  setToggle('n-tls', em.use_tls!==false);
+  const tg = n.telegram||{}; setToggle('n-tg', tg.enabled);
+  document.getElementById('n-tg-token').value = tg.bot_token||'';
+  document.getElementById('n-tg-chat').value  = tg.chat_id||'';
+  const wh = n.webhook||{}; setToggle('n-wh', wh.enabled);
+  document.getElementById('n-wh-url').value = wh.url||'';
+}
+async function saveNotifications() {
+  const existing = await api('GET','/api/settings');
+  existing.notifications = {
+    enabled: !!bools['n-enabled'],
+    email: { enabled:!!bools['n-email'], smtp_host:v('n-smtp-host'), smtp_port:parseInt(v('n-smtp-port'))||587,
+             smtp_user:v('n-smtp-user'), smtp_password:v('n-smtp-pass'), to:v('n-email-to'), use_tls:!!bools['n-tls'] },
+    telegram: { enabled:!!bools['n-tg'], bot_token:v('n-tg-token'), chat_id:v('n-tg-chat') },
+    webhook:  { enabled:!!bools['n-wh'], url:v('n-wh-url') },
+  };
+  await api('POST','/api/settings', existing); toast('Notifications saved');
+}
+async function testNotif(ch) {
+  toast(`Sending test ${ch}…`);
+  const r = await api('POST',`/api/notifications/test/${ch}`);
+  toast(r.message, r.ok?'ok':'err');
+}
+
+// ── Retention ─────────────────────────────────────────────
+async function loadRetention() {
+  const s = await api('GET','/api/settings');
+  const r = s.retention||{};
+  setToggle('ret-enabled', r.enabled);
+  document.getElementById('ret-keep-n').value    = r.keep_last_n||10;
+  document.getElementById('ret-keep-days').value = r.keep_days||30;
+}
+async function saveRetention() {
+  const existing = await api('GET','/api/settings');
+  existing.retention = { enabled:!!bools['ret-enabled'], keep_last_n:parseInt(v('ret-keep-n'))||0, keep_days:parseInt(v('ret-keep-days'))||0 };
+  await api('POST','/api/settings', existing); toast('Retention policy saved');
+}
+async function previewRetention() {
+  const list = await api('GET','/api/retention/preview');
+  const el = document.getElementById('retention-preview');
+  if (!list.length) { el.innerHTML = '<div class="card"><div class="card-title" style="color:var(--green)">✓ Nothing to delete under current policy.</div></div>'; return; }
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-header"><div class="card-title">Would delete ${list.length} dump(s)</div></div>
+      <table class="tbl">
+        <thead><tr><th>DB</th><th>File</th><th>Created</th><th>Size</th><th>Reason</th></tr></thead>
+        <tbody>${list.map(i=>`<tr><td>${i.db_name}</td><td class="mono">${i.filename}</td><td class="mono">${fmtDate(i.created_at)}</td><td class="mono">${fmtBytes(i.size)}</td><td style="color:var(--red)">${i.reason}</td></tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+}
+async function applyRetention() {
+  if (!confirm('Apply retention policy now? This will permanently delete old dump files.')) return;
+  const r = await api('POST','/api/retention/apply');
+  toast(`Deleted ${r.count} dump(s)`, r.ok?'ok':'err');
+  renderHistory();
+  document.getElementById('retention-preview').innerHTML='';
+}
+
+// ── Modal helpers ─────────────────────────────────────────
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-document.querySelectorAll('.modal-backdrop').forEach(m => {
-  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
-});
+document.querySelectorAll('.modal-backdrop').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open'); }));
 
-// ── Utils ────────────────────────────────────────────────
-function formatBytes(b) {
+// ── Utils ─────────────────────────────────────────────────
+function fmtBytes(b) {
   if (!b) return '—';
-  if (b < 1024) return b + ' B';
-  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
-  if (b < 1073741824) return (b/1048576).toFixed(1) + ' MB';
-  return (b/1073741824).toFixed(2) + ' GB';
+  if (b<1024) return b+' B';
+  if (b<1048576) return (b/1024).toFixed(1)+' KB';
+  if (b<1073741824) return (b/1048576).toFixed(1)+' MB';
+  return (b/1073741824).toFixed(2)+' GB';
 }
-
-function formatDate(iso) {
+function fmtDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
-  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  return d.toLocaleDateString('ru-RU')+' '+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
 }
 
-// ── Init ─────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────
+setToggle('db-del-remote', true);
+setToggle('n-tls', true);
 refreshDashboard();
 </script>
 </body>

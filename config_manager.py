@@ -10,7 +10,34 @@ DEFAULT_CONFIG = {
     "history": [],
     "settings": {
         "default_save_path": "./dumps",
-        "max_history": 100
+        "max_history": 100,
+        "auto_verify": False,
+        "retention": {
+            "enabled": False,
+            "keep_last_n": 10,
+            "keep_days": 30
+        },
+        "notifications": {
+            "enabled": False,
+            "email": {
+                "enabled": False,
+                "smtp_host": "smtp.gmail.com",
+                "smtp_port": 587,
+                "smtp_user": "",
+                "smtp_password": "",
+                "to": "",
+                "use_tls": True
+            },
+            "telegram": {
+                "enabled": False,
+                "bot_token": "",
+                "chat_id": ""
+            },
+            "webhook": {
+                "enabled": False,
+                "url": ""
+            }
+        }
     }
 }
 

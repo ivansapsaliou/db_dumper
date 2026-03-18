@@ -1,0 +1,395 @@
+{
+  "databases": [
+    {
+      "name": "Local MySQL",
+      "type": "mysql",
+      "host": "127.0.0.1",
+      "port": null,
+      "user": "root",
+      "password": "1234qwer!@#$",
+      "database": "migr_server2",
+      "service_name": "",
+      "include_tables": [],
+      "exclude_tables": [],
+      "include_schemas": [],
+      "exclude_schemas": [],
+      "dump_mode": "full",
+      "compress_level": 0,
+      "no_owner": false,
+      "no_acl": false,
+      "estimated_size_mb": 500,
+      "use_ssh": false,
+      "ssh_host": "",
+      "ssh_port": 22,
+      "ssh_user": "",
+      "ssh_password": "",
+      "ssh_key": "",
+      "remote_tmp_dir": "",
+      "delete_remote_after": true,
+      "id": "a8699de2-af41-49ba-a2f6-724f175eedcf"
+    },
+    {
+      "name": "RUL-TEST",
+      "type": "postgresql",
+      "host": "10.100.102.90",
+      "port": null,
+      "user": "rul_developer",
+      "password": "ENC:gAAAAABpupgudCg8xXzAQHLCxKDDLBvFC_tzKieoUJwxN5AL16F5f5TaM8ymVbgU-cwcFctE-UNkb9y3L1zu86yKR61KdvC30SCCt-WsCPlleiyTGr2_ESI=",
+      "database": "rul_jkh",
+      "service_name": "",
+      "include_tables": [],
+      "exclude_tables": [],
+      "include_schemas": [],
+      "exclude_schemas": [],
+      "dump_mode": "schema_only",
+      "dump_format": "plain",
+      "compress_level": 0,
+      "no_owner": false,
+      "no_acl": false,
+      "estimated_size_mb": 500,
+      "use_ssh": true,
+      "ssh_host": "10.100.102.90",
+      "ssh_port": 22,
+      "ssh_user": "nladmin",
+      "ssh_password": "ENC:gAAAAABpupguWcThJOlPeV-KnpRoBP7amR9zUOAl9-4iDU02OTvo9v1RD5BvAT_PaKtK8uSS9r56V179--Ox57J3sPdG-lYG4g==",
+      "ssh_key": "",
+      "remote_tmp_dir": "",
+      "delete_remote_after": false,
+      "id": "ff96a394-e407-422b-a37b-4aa5663fbada"
+    },
+    {
+      "name": "Local MySQL 1",
+      "type": "mysql",
+      "host": "127.0.0.1",
+      "port": null,
+      "user": "root",
+      "password": "1234qwer!@#$",
+      "database": "migr_server2",
+      "service_name": "",
+      "include_tables": [],
+      "exclude_tables": [],
+      "include_schemas": [],
+      "exclude_schemas": [],
+      "dump_mode": "full",
+      "dump_format": "plain",
+      "compress_level": 0,
+      "no_owner": false,
+      "no_acl": false,
+      "estimated_size_mb": 500,
+      "use_ssh": false,
+      "ssh_host": "",
+      "ssh_port": 22,
+      "ssh_user": "",
+      "ssh_password": "",
+      "ssh_key": "",
+      "remote_tmp_dir": "",
+      "delete_remote_after": true,
+      "id": "c5727069-5653-4036-8d5a-7bfb8fe8a474"
+    }
+  ],
+  "schedules": [
+    {
+      "db_id": "a8699de2-af41-49ba-a2f6-724f175eedcf",
+      "cron": "0/15 * * * *",
+      "save_path": "D:\\Dumps\\autodumps",
+      "id": "67b2b93c-2d47-44ee-a718-6c9b01be90c6",
+      "enabled": false
+    }
+  ],
+  "history": [
+    {
+      "dump_id": "6886930f-4d40-434c-bae4-b0b6f544c585",
+      "db_id": "ff96a394-e407-422b-a37b-4aa5663fbada",
+      "db_name": "rul_jkh",
+      "filename": "rul_jkh_20260318_160948.sql",
+      "filepath": "D:\\Dumps\\autodumps\\rul_jkh\\rul_jkh_20260318_160948.sql",
+      "size": 2018285,
+      "status": "done",
+      "created_at": "2026-03-18T16:09:51.045420",
+      "verify": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "File exists & non-empty",
+            "ok": true,
+            "detail": "1.9 MB"
+          },
+          {
+            "name": "Has dump header comment",
+            "ok": true,
+            "detail": "Found"
+          },
+          {
+            "name": "Contains CREATE TABLE statements",
+            "ok": true,
+            "detail": "2 table definitions found"
+          },
+          {
+            "name": "Contains INSERT statements",
+            "ok": true,
+            "detail": "324 INSERT blocks"
+          }
+        ],
+        "summary": "✅ OK — 4 checks, 2 tables, 324 INSERT blocks",
+        "tables_found": 2,
+        "inserts_found": 324,
+        "file_size": 2018285
+      }
+    },
+    {
+      "dump_id": "ed10648e-3134-4919-827f-18f0891652cd",
+      "db_id": "ff96a394-e407-422b-a37b-4aa5663fbada",
+      "db_name": "rul_jkh",
+      "filename": "rul_jkh_20260318_151857.sql",
+      "filepath": "D:\\Dumps\\autodumps\\rul_jkh_20260318_151857.sql",
+      "size": 2017895,
+      "status": "done",
+      "created_at": "2026-03-18T15:18:59.669877",
+      "verify": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "File exists & non-empty",
+            "ok": true,
+            "detail": "1.9 MB"
+          },
+          {
+            "name": "Has dump header comment",
+            "ok": true,
+            "detail": "Found"
+          },
+          {
+            "name": "Contains CREATE TABLE statements",
+            "ok": true,
+            "detail": "2 table definitions found"
+          },
+          {
+            "name": "Contains INSERT statements",
+            "ok": true,
+            "detail": "324 INSERT blocks"
+          }
+        ],
+        "summary": "✅ OK — 4 checks, 2 tables, 324 INSERT blocks",
+        "tables_found": 2,
+        "inserts_found": 324,
+        "file_size": 2017895
+      }
+    },
+    {
+      "dump_id": "d8828a26-eed7-4353-8e4c-36aedd9a65ca",
+      "db_id": "ff96a394-e407-422b-a37b-4aa5663fbada",
+      "db_name": "rul_jkh",
+      "filename": "rul_jkh_20260318_143241.sql",
+      "filepath": "D:\\Dumps\\autodumps\\rul_jkh_20260318_143241.sql",
+      "size": 15294815,
+      "status": "done",
+      "created_at": "2026-03-18T14:32:45.000353",
+      "verify": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "File exists & non-empty",
+            "ok": true,
+            "detail": "14.6 MB"
+          },
+          {
+            "name": "Has dump header comment",
+            "ok": true,
+            "detail": "Found"
+          },
+          {
+            "name": "Contains CREATE TABLE statements",
+            "ok": true,
+            "detail": "2 table definitions found"
+          },
+          {
+            "name": "Contains INSERT statements",
+            "ok": true,
+            "detail": "322 INSERT blocks"
+          }
+        ],
+        "summary": "✅ OK — 4 checks, 2 tables, 322 INSERT blocks",
+        "tables_found": 2,
+        "inserts_found": 322,
+        "file_size": 15294815
+      }
+    },
+    {
+      "dump_id": "1f08fab4-3ffb-4574-8030-54c4e3375a77",
+      "db_id": "ff96a394-e407-422b-a37b-4aa5663fbada",
+      "db_name": "rul_jkh",
+      "filename": "rul_jkh_20260318_143129.sql",
+      "filepath": "D:\\Dumps\\autodumps\\rul_jkh_20260318_143129.sql",
+      "size": 3382085,
+      "status": "done",
+      "created_at": "2026-03-18T14:31:32.895078",
+      "verify": {
+        "ok": false,
+        "checks": [
+          {
+            "name": "File exists & non-empty",
+            "ok": true,
+            "detail": "3.2 MB"
+          },
+          {
+            "name": "Has dump header comment",
+            "ok": false,
+            "detail": "Missing"
+          },
+          {
+            "name": "Contains CREATE TABLE statements",
+            "ok": true,
+            "detail": "2 table definitions found"
+          },
+          {
+            "name": "Contains INSERT statements",
+            "ok": true,
+            "detail": "322 INSERT blocks"
+          }
+        ],
+        "summary": "⚠️ Issues found — 4 checks, 2 tables, 322 INSERT blocks",
+        "tables_found": 2,
+        "inserts_found": 322,
+        "file_size": 3382085
+      }
+    },
+    {
+      "dump_id": "35cb6fa5-b7c1-4e05-8376-c6e851897d50",
+      "db_id": "ff96a394-e407-422b-a37b-4aa5663fbada",
+      "db_name": "rul_jkh2",
+      "filename": "rul_jkh2_20260318_143025.sql",
+      "filepath": "D:\\Dumps\\autodumps\\rul_jkh2_20260318_143025.sql",
+      "size": 2151332,
+      "status": "done",
+      "created_at": "2026-03-18T14:30:28.435907",
+      "verify": {
+        "ok": false,
+        "checks": [
+          {
+            "name": "File exists & non-empty",
+            "ok": true,
+            "detail": "2.1 MB"
+          },
+          {
+            "name": "Has dump header comment",
+            "ok": false,
+            "detail": "Missing"
+          },
+          {
+            "name": "Contains CREATE TABLE statements",
+            "ok": true,
+            "detail": "2 table definitions found"
+          },
+          {
+            "name": "Contains INSERT statements",
+            "ok": true,
+            "detail": "226 INSERT blocks"
+          }
+        ],
+        "summary": "⚠️ Issues found — 4 checks, 2 tables, 226 INSERT blocks",
+        "tables_found": 2,
+        "inserts_found": 226,
+        "file_size": 2151332
+      }
+    },
+    {
+      "dump_id": "94c26dca-c905-4d93-a83e-f1b6098f3540",
+      "db_id": "a8699de2-af41-49ba-a2f6-724f175eedcf",
+      "db_name": "migr_server2",
+      "filename": "migr_server2_20260318_142936.sql",
+      "filepath": "D:\\Dumps\\autodumps\\migr_server2_20260318_142936.sql",
+      "size": 194432605,
+      "status": "done",
+      "created_at": "2026-03-18T14:29:51.699288",
+      "verify": {
+        "ok": true,
+        "checks": [
+          {
+            "name": "File exists & non-empty",
+            "ok": true,
+            "detail": "185.4 MB"
+          },
+          {
+            "name": "Has dump header comment",
+            "ok": true,
+            "detail": "Found"
+          },
+          {
+            "name": "Contains CREATE TABLE statements",
+            "ok": true,
+            "detail": "11 table definitions found"
+          },
+          {
+            "name": "Contains INSERT statements",
+            "ok": true,
+            "detail": "3,184 INSERT blocks"
+          }
+        ],
+        "summary": "✅ OK — 4 checks, 11 tables, 3,184 INSERT blocks",
+        "tables_found": 11,
+        "inserts_found": 3184,
+        "file_size": 194432605
+      }
+    },
+    {
+      "dump_id": "3a9990e6-7e90-4f9d-82e4-3a21c7581c3c",
+      "db_id": "c5727069-5653-4036-8d5a-7bfb8fe8a474",
+      "db_name": "migr_server2",
+      "filename": "migr_server2_20260318_141621.sql",
+      "filepath": "D:\\Dumps\\autodumps\\migr_server2_20260318_141621.sql",
+      "size": 194421205,
+      "status": "done",
+      "created_at": "2026-03-18T14:16:34.357545"
+    },
+    {
+      "dump_id": "876b3de8-c258-451e-a86a-509328a296e1",
+      "db_id": "a8699de2-af41-49ba-a2f6-724f175eedcf",
+      "db_name": "migr_server2",
+      "filename": "migr_server2_20260318_135814.sql",
+      "filepath": "D:\\Dumps\\autodumps\\migr_server2_20260318_135814.sql",
+      "size": 194421205,
+      "status": "done",
+      "created_at": "2026-03-18T13:58:29.714257"
+    },
+    {
+      "dump_id": "e8437bff-832a-4272-8141-d8e0b64ddd65",
+      "db_id": "a8699de2-af41-49ba-a2f6-724f175eedcf",
+      "db_name": "migr_server2",
+      "filename": "migr_server2_20260318_134500.sql",
+      "filepath": "D:\\Dumps\\autodumps\\migr_server2_20260318_134500.sql",
+      "size": 80538,
+      "status": "done",
+      "created_at": "2026-03-18T13:45:00.170440"
+    },
+    {
+      "dump_id": "48e82723-bb44-4f2c-82ca-8bc36dd57881",
+      "db_id": "a8699de2-af41-49ba-a2f6-724f175eedcf",
+      "db_name": "migr_server2",
+      "filename": "migr_server2_20260318_133000.sql",
+      "filepath": "D:\\Dumps\\autodumps\\migr_server2_20260318_133000.sql",
+      "size": 80538,
+      "status": "done",
+      "created_at": "2026-03-18T13:30:00.180964"
+    },
+    {
+      "dump_id": "917fa447-a6ac-4bd5-b531-ea055b1c4a05",
+      "db_id": "a8699de2-af41-49ba-a2f6-724f175eedcf",
+      "db_name": "migr_server2",
+      "filename": "migr_server2_20260318_131500.sql",
+      "filepath": "D:\\Dumps\\autodumps\\migr_server2_20260318_131500.sql",
+      "size": 80538,
+      "status": "done",
+      "created_at": "2026-03-18T13:15:00.176700"
+    }
+  ],
+  "settings": {
+    "auto_verify": true,
+    "default_save_path": "D:\\Dumps\\autodumps",
+    "max_history": 100,
+    "retention": {
+      "enabled": true,
+      "keep_last_n": 5,
+      "keep_days": 0
+    }
+  }
+}
