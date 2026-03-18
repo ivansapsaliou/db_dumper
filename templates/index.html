@@ -216,6 +216,34 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 ::-webkit-scrollbar{width:5px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+/* ── Advanced embedded pages ── */
+.pill.fail{background:var(--red-bg);color:var(--red)}
+.issue-row{padding:7px 10px;background:var(--yellow-bg);border-left:3px solid var(--yellow);border-radius:4px;margin-bottom:5px;font-size:12px;color:var(--text2)}
+canvas{max-height:300px}
+.page-actions{display:flex;gap:8px;flex-wrap:wrap}
+.checkbox-group{display:flex;flex-wrap:wrap;gap:6px;max-height:180px;overflow-y:auto;padding:4px 0}
+.table-check{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;font-size:11px;cursor:pointer;user-select:none}
+.table-check input{width:auto;padding:0}
+.table-check:has(input:checked){background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+.restore-log{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:10px 12px;font-family:var(--mono);font-size:11px;min-height:80px;max-height:200px;overflow-y:auto;color:var(--text2)}
+.cal-nav{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.cal-month-label{font-size:15px;font-weight:700;min-width:160px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-day-header{text-align:center;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:6px 0}
+.cal-cell{min-height:76px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:5px 6px}
+.cal-cell.today{border-color:var(--accent);background:var(--accent-bg)}
+.cal-cell.other-month{opacity:.4}
+.cal-date{font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px}
+.cal-date.today-num{color:var(--accent);font-weight:700}
+.cal-event{font-size:10px;padding:2px 5px;border-radius:4px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:default;background:var(--accent-bg);color:var(--accent);border:1px solid #c7d8fe}
+.cal-event:hover{opacity:.8}
+.cal-more{font-size:10px;color:var(--muted);cursor:pointer}
+.cal-sched-item{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:10px 13px;margin-bottom:6px;display:flex;align-items:flex-start;gap:10px}
+.cal-sched-time{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--accent);min-width:100px}
+.cal-sched-name{font-size:12px;font-weight:500}
+.cal-sched-expr{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px}
+@media(max-width:700px){.cal-cell{min-height:50px}.cal-event{display:none}}
 </style>
 </head>
 <body>
@@ -259,15 +287,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
       History
     </div>
     <div class="nav-sec">Advanced</div>
-    <div class="nav-item" onclick="window.location='/restore'">
+    <div class="nav-item" onclick="showPage('restore')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.33"/></svg>
       Restore
     </div>
-    <div class="nav-item" onclick="window.location='/reports'">
+    <div class="nav-item" onclick="showPage('reports')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
       Reports
     </div>
-    <div class="nav-item" onclick="window.location='/calendar'">
+    <div class="nav-item" onclick="showPage('calendar')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="8" cy="15" r="1" fill="currentColor"/><circle cx="12" cy="15" r="1" fill="currentColor"/><circle cx="16" cy="15" r="1" fill="currentColor"/></svg>
       Calendar
     </div>
@@ -641,6 +669,178 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
   <div id="audit-pagination" style="display:flex;justify-content:center;gap:8px;margin-top:12px"></div>
 </div>
 
+<!-- ══ Reports ═══════════════════════════════════════════ -->
+<div id="page-reports" class="page">
+  <div class="page-header">
+    <div class="page-title">📊 Reports & Analytics</div>
+    <div class="page-actions">
+      <select id="rpt-period-select" onchange="loadReports()">
+        <option value="7">Last 7 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="365">Last year</option>
+      </select>
+      <button class="btn btn-success btn-sm" onclick="exportReport('csv')">⬇ CSV</button>
+      <button class="btn btn-primary btn-sm" onclick="exportReport('pdf')">📄 PDF</button>
+      <button class="btn btn-ghost btn-sm" onclick="loadReports()">↻ Refresh</button>
+    </div>
+  </div>
+  <div class="grid4">
+    <div class="stat-card">
+      <div class="stat-top"><div><div class="stat-value" id="rpt-s-total">—</div><div class="stat-label">Total Dumps</div></div>
+        <div class="stat-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-top"><div><div class="stat-value" id="rpt-s-success-rate">—</div><div class="stat-label">Success Rate</div></div>
+        <div class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-top"><div><div class="stat-value" id="rpt-s-size">—</div><div class="stat-label">Total Size</div></div>
+        <div class="stat-icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-top"><div><div class="stat-value" id="rpt-s-dbs">—</div><div class="stat-label">Databases</div></div>
+        <div class="stat-icon red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+      </div>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Dump size over time</span></div>
+      <canvas id="rpt-chart-size"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Dump speed (MB/min)</span></div>
+      <canvas id="rpt-chart-speed"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">Per-database breakdown</span></div>
+    <table class="tbl">
+      <thead><tr><th>Database</th><th>Dumps</th><th>Total Size</th><th>Avg Size</th><th>Avg Speed</th></tr></thead>
+      <tbody id="rpt-db-breakdown-body"></tbody>
+    </table>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Compliance report</span>
+      <button class="btn btn-ghost btn-sm" onclick="loadReportCompliance()">↻</button>
+    </div>
+    <div id="rpt-compliance-issues"></div>
+    <table class="tbl" style="margin-top:10px">
+      <thead><tr><th>Database</th><th>Last backup</th><th>Age (h)</th><th>Status</th><th>SLA</th></tr></thead>
+      <tbody id="rpt-compliance-body"></tbody>
+    </table>
+  </div>
+  <div class="card" id="rpt-errors-card" style="display:none">
+    <div class="card-header"><span class="card-title">Top errors</span></div>
+    <table class="tbl">
+      <thead><tr><th>Message</th><th>Count</th></tr></thead>
+      <tbody id="rpt-errors-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══ Restore ════════════════════════════════════════════ -->
+<div id="page-restore" class="page">
+  <div class="page-header">
+    <div class="page-title">🔄 Restore Dumps</div>
+  </div>
+  <div class="card" id="rst-step-select">
+    <div class="card-header"><span class="card-title">Step 1 — Select dump to restore</span></div>
+    <div class="form-group">
+      <label>Backup from history</label>
+      <select id="rst-dump-select" onchange="rstLoadPreview()">
+        <option value="">— Loading history… —</option>
+      </select>
+    </div>
+    <div id="rst-preview-area" style="display:none">
+      <div class="info-box" id="rst-preview-info"></div>
+      <div class="card-title" style="margin-bottom:8px">Tables in dump</div>
+      <div id="rst-table-checkboxes" class="checkbox-group"></div>
+      <div style="margin-top:8px;font-size:11px;color:var(--muted)">
+        Check tables to restore selectively (leave all unchecked = restore everything)
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">Step 2 — Target database</span></div>
+    <div class="grid2">
+      <div class="form-group">
+        <label>Target database</label>
+        <select id="rst-db-select">
+          <option value="">— Loading databases… —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Parallel threads</label>
+        <input type="number" id="rst-threads" value="1" min="1" max="16">
+      </div>
+    </div>
+    <div class="warn-box">
+      ⚠️ Restoring will overwrite data in the target database. Make sure you have selected the correct target.
+    </div>
+    <button class="btn btn-primary" onclick="rstStartRestore()">▶ Start Restore</button>
+    <button class="btn btn-ghost" style="margin-left:8px" onclick="rstPreviewOnly()">🔍 Preview Only</button>
+  </div>
+  <div class="card" id="rst-progress-card" style="display:none">
+    <div class="card-header">
+      <span class="card-title">Restore Progress</span>
+      <button class="btn btn-danger btn-sm" onclick="rstCancelRestore()" id="rst-cancel-btn">Cancel</button>
+    </div>
+    <div class="restore-log" id="rst-restore-log">—</div>
+    <div class="progress-wrap"><div class="progress-fill running" id="rst-progress-fill" style="width:0%"></div></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px" id="rst-percent-text">0%</div>
+    <div id="rst-row-counts-section" style="display:none;margin-top:14px">
+      <div class="card-title" style="margin-bottom:8px">Row counts after restore</div>
+      <table class="tbl"><thead><tr><th>Table</th><th>Rows</th></tr></thead>
+        <tbody id="rst-row-counts-body"></tbody></table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Automated test history</span>
+      <button class="btn btn-ghost btn-sm" onclick="rstLoadTestHistory()">↻ Refresh</button>
+    </div>
+    <table class="tbl">
+      <thead><tr><th>Date</th><th>Dump</th><th>DB</th><th>Status</th><th>Tables OK</th><th>Duration</th></tr></thead>
+      <tbody id="rst-test-history-body"><tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">No tests run yet</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══ Calendar ═══════════════════════════════════════════ -->
+<div id="page-calendar" class="page">
+  <div class="page-header">
+    <div class="page-title">📅 Schedule Calendar</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost btn-sm" onclick="calChangeView('calendar')">Calendar</button>
+      <button class="btn btn-ghost btn-sm" onclick="calChangeView('list')">List</button>
+      <button class="btn btn-primary btn-sm" onclick="loadCalendarPage()">↻ Refresh</button>
+    </div>
+  </div>
+  <div class="card" id="cal-calendar-view">
+    <div class="cal-nav">
+      <button class="btn btn-ghost btn-sm" onclick="calPrevMonth()">←</button>
+      <div class="cal-month-label" id="cal-month-label"></div>
+      <button class="btn btn-ghost btn-sm" onclick="calNextMonth()">→</button>
+    </div>
+    <div class="cal-grid" id="cal-headers"></div>
+    <div class="cal-grid" id="cal-cells" style="margin-top:4px"></div>
+  </div>
+  <div class="card" id="cal-list-view" style="display:none">
+    <div class="card-header"><span class="card-title">Upcoming scheduled runs (next 30 days)</span></div>
+    <div id="cal-schedule-list"></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><span class="card-title">Active schedules</span></div>
+    <div id="cal-schedules-legend"></div>
+  </div>
+</div>
+
 </main><!-- /main -->
 
 <!-- ══ Add/Edit DB Modal ═══════════════════════════════ -->
@@ -875,6 +1075,7 @@ function showPage(id) {
     schedules: renderSchedules, history: renderHistory,
     settings: loadSettings, notifications: loadNotifications, retention: loadRetention,
     storage: loadStorage, audit: renderAuditLog,
+    reports: loadReports, restore: loadRestorePage, calendar: loadCalendarPage,
   }[id] || (()=>{}))();
 }
 
@@ -1771,6 +1972,338 @@ function fmtDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
   return d.toLocaleDateString('ru-RU')+' '+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+}
+
+// ── Reports page ─────────────────────────────────────────
+let rptSizeChart = null, rptSpeedChart = null;
+
+async function loadReportSummary() {
+  const days = document.getElementById('rpt-period-select').value;
+  const s = await api('GET', `/api/reports/summary?days=${days}`);
+  document.getElementById('rpt-s-total').textContent        = s.total_dumps ?? '—';
+  document.getElementById('rpt-s-success-rate').textContent = (s.success_rate ?? '—') + '%';
+  document.getElementById('rpt-s-size').textContent         = fmtBytes((s.total_size_mb || 0) * 1024 * 1024);
+  document.getElementById('rpt-s-dbs').textContent          = s.databases ?? '—';
+}
+
+async function loadReportTrends() {
+  const data    = await api('GET', '/api/reports/trends');
+  const labels  = (data.trends || []).map(t => t.date || '');
+  const sizes   = (data.trends || []).map(t => t.size_mb || 0);
+  const speeds  = (data.trends || []).map(t => t.speed_mbmin || 0);
+
+  const sizeCtx = document.getElementById('rpt-chart-size').getContext('2d');
+  if (rptSizeChart) rptSizeChart.destroy();
+  rptSizeChart = new Chart(sizeCtx, {
+    type: 'line',
+    data: { labels, datasets: [{ label: 'Size (MB)', data: sizes,
+      borderColor: '#3b6ef5', backgroundColor: 'rgba(59,110,245,.1)',
+      fill: true, tension: 0.3, pointRadius: 2 }] },
+    options: { responsive: true, plugins: { legend: { display: false } },
+               scales: { x: { ticks: { maxTicksLimit: 8 } }, y: { beginAtZero: true } } },
+  });
+
+  const speedCtx = document.getElementById('rpt-chart-speed').getContext('2d');
+  if (rptSpeedChart) rptSpeedChart.destroy();
+  rptSpeedChart = new Chart(speedCtx, {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'MB/min', data: speeds,
+      backgroundColor: 'rgba(14,162,113,.3)', borderColor: '#0ea271', borderWidth: 1 }] },
+    options: { responsive: true, plugins: { legend: { display: false } },
+               scales: { x: { ticks: { maxTicksLimit: 8 } }, y: { beginAtZero: true } } },
+  });
+
+  const tbody = document.getElementById('rpt-db-breakdown-body');
+  tbody.innerHTML = Object.entries(data.by_db || {}).map(([name, d]) => `
+    <tr>
+      <td>${name}</td>
+      <td class="mono">${d.count}</td>
+      <td class="mono">${fmtBytes(d.total_size_mb * 1024 * 1024)}</td>
+      <td class="mono">${fmtBytes(d.avg_size_mb * 1024 * 1024)}</td>
+      <td class="mono">${d.avg_speed_mbmin} MB/min</td>
+    </tr>
+  `).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">No data</td></tr>';
+
+  if (data.top_errors && data.top_errors.length) {
+    document.getElementById('rpt-errors-card').style.display = '';
+    document.getElementById('rpt-errors-body').innerHTML =
+      data.top_errors.map(e => `<tr><td>${e.message}</td><td class="mono">${e.count}</td></tr>`).join('');
+  } else {
+    document.getElementById('rpt-errors-card').style.display = 'none';
+  }
+}
+
+async function loadReportCompliance() {
+  const data   = await api('GET', '/api/reports/compliance');
+  const issues = document.getElementById('rpt-compliance-issues');
+  if (data.issues && data.issues.length) {
+    issues.innerHTML = data.issues.map(i => `<div class="issue-row">⚠️ ${i}</div>`).join('');
+  } else {
+    issues.innerHTML = '<div style="color:var(--green);font-size:12px;padding:6px 0">✅ All compliance checks passed</div>';
+  }
+  const tbody = document.getElementById('rpt-compliance-body');
+  tbody.innerHTML = Object.entries(data.databases || {}).map(([name, d]) => `
+    <tr>
+      <td>${name}</td>
+      <td class="mono">${(d.last_backup || '—').slice(0, 16).replace('T', ' ')}</td>
+      <td class="mono">${d.age_h}</td>
+      <td><span class="pill ${d.last_status === 'done' ? 'ok' : 'fail'}">${d.last_status || '—'}</span></td>
+      <td><span class="pill ${d.sla_ok ? 'ok' : 'fail'}">${d.sla_ok ? 'OK' : 'FAIL'}</span></td>
+    </tr>
+  `).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">No data</td></tr>';
+}
+
+async function exportReport(fmt) {
+  const days = document.getElementById('rpt-period-select').value;
+  toast(`Preparing ${fmt.toUpperCase()} export…`);
+  try {
+    const r = await fetch(`/api/reports/export/${fmt}?days=${days}`);
+    if (!r.ok) { const j = await r.json().catch(() => ({})); toast(j.message || 'Export failed', 'err'); return; }
+    const blob   = await r.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const a      = document.createElement('a');
+    a.href       = objUrl;
+    a.download   = `backup_report_${new Date().toISOString().slice(0, 10)}.${fmt}`;
+    a.click();
+    URL.revokeObjectURL(objUrl);
+    toast(`${fmt.toUpperCase()} downloaded`, 'ok');
+  } catch(e) { toast('Export error: ' + e.message, 'err'); }
+}
+
+async function loadReports() {
+  await Promise.all([loadReportSummary(), loadReportTrends(), loadReportCompliance()]);
+}
+
+// ── Restore page ──────────────────────────────────────────
+let rstCurrentRestoreId = null;
+
+async function rstLoadHistory() {
+  const hist = await api('GET', '/api/history');
+  const sel  = document.getElementById('rst-dump-select');
+  const done = hist.filter(h => h.status === 'done');
+  if (!done.length) { sel.innerHTML = '<option value="">— No completed dumps —</option>'; return; }
+  sel.innerHTML = '<option value="">— Select a dump —</option>' +
+    done.map(h => `<option value="${h.dump_id}" data-file="${h.filepath || ''}">${h.db_name} — ${h.filename} (${fmtBytes(h.size)})</option>`).join('');
+}
+
+async function rstLoadDatabases() {
+  const dbs = await api('GET', '/api/databases');
+  const sel = document.getElementById('rst-db-select');
+  sel.innerHTML = '<option value="">— Select target database —</option>' +
+    dbs.map(db => `<option value="${db.id}">${db.name} (${db.type.toUpperCase()})</option>`).join('');
+}
+
+async function rstLoadPreview() {
+  const dumpId = document.getElementById('rst-dump-select').value;
+  const area   = document.getElementById('rst-preview-area');
+  if (!dumpId) { area.style.display = 'none'; return; }
+  document.getElementById('rst-preview-info').textContent = 'Loading preview…';
+  area.style.display = 'block';
+  document.getElementById('rst-table-checkboxes').innerHTML = '';
+  const r = await api('POST', `/api/restore/preview/${dumpId}`);
+  if (!r.ok) { document.getElementById('rst-preview-info').textContent = 'Preview failed: ' + r.message; return; }
+  document.getElementById('rst-preview-info').innerHTML =
+    `📄 File: <b>${fmtBytes(r.file_size)}</b> &nbsp;|&nbsp; Format: <b>${r.format.toUpperCase()}</b>` +
+    ` &nbsp;|&nbsp; Est. restore time: <b>~${r.estimated_restore_min} min</b>` +
+    ` &nbsp;|&nbsp; Tables detected: <b>${r.tables.length}</b>`;
+  const box = document.getElementById('rst-table-checkboxes');
+  box.innerHTML = r.tables.map(t =>
+    `<label class="table-check"><input type="checkbox" name="rst-table" value="${t.name}">${t.name} <span style="color:var(--muted)">(${t.rows} inserts)</span></label>`
+  ).join('');
+}
+
+async function rstPreviewOnly() { await rstLoadPreview(); toast('Preview loaded', 'ok'); }
+
+async function rstStartRestore() {
+  const dumpId  = document.getElementById('rst-dump-select').value;
+  const dbId    = document.getElementById('rst-db-select').value;
+  const threads = parseInt(document.getElementById('rst-threads').value) || 1;
+  if (!dumpId) { toast('Select a dump first', 'err'); return; }
+  if (!dbId)   { toast('Select a target database', 'err'); return; }
+  const tables = [...document.querySelectorAll('input[name="rst-table"]:checked')].map(el => el.value);
+  const r = await api('POST', '/api/restore/start', { dump_id: dumpId, db_id: dbId, tables: tables.length ? tables : null, threads });
+  if (!r.ok) { toast(r.message || 'Failed to start restore', 'err'); return; }
+  rstCurrentRestoreId = r.restore_id;
+  document.getElementById('rst-progress-card').style.display = 'block';
+  document.getElementById('rst-restore-log').textContent = 'Restore started…';
+  document.getElementById('rst-progress-fill').style.width = '0%';
+  document.getElementById('rst-progress-fill').className = 'progress-fill running';
+  document.getElementById('rst-cancel-btn').style.display = '';
+  toast('Restore started', 'ok');
+  rstPollRestore();
+}
+
+async function rstPollRestore() {
+  if (!rstCurrentRestoreId) return;
+  const r = await api('GET', `/api/restore/progress/${rstCurrentRestoreId}`);
+  if (!r.ok) return;
+  const fill = document.getElementById('rst-progress-fill');
+  const pct  = r.percent || 0;
+  fill.style.width = pct + '%';
+  fill.className   = 'progress-fill ' + (['done','error','cancelled'].includes(r.status) ? r.status : 'running');
+  document.getElementById('rst-percent-text').textContent = pct + '% — ' + (r.message || '');
+  document.getElementById('rst-restore-log').textContent = r.message || '—';
+  if (r.row_counts && Object.keys(r.row_counts).length) {
+    document.getElementById('rst-row-counts-section').style.display = '';
+    document.getElementById('rst-row-counts-body').innerHTML =
+      Object.entries(r.row_counts).map(([t, c]) =>
+        `<tr><td class="mono">${t}</td><td class="mono">${c >= 0 ? c.toLocaleString() : '—'}</td></tr>`
+      ).join('');
+  }
+  if (['done','error','cancelled'].includes(r.status)) {
+    document.getElementById('rst-cancel-btn').style.display = 'none';
+    if (r.status === 'done') toast('Restore completed!', 'ok');
+    else if (r.status === 'error') toast('Restore failed: ' + r.message, 'err');
+    return;
+  }
+  setTimeout(rstPollRestore, 1500);
+}
+
+socket.on('restore_progress', data => {
+  if (data.restore_id !== rstCurrentRestoreId) return;
+  const fill = document.getElementById('rst-progress-fill');
+  if (!fill) return;
+  fill.style.width = (data.percent || 0) + '%';
+  fill.className   = 'progress-fill ' + (['done','error','cancelled'].includes(data.status) ? data.status : 'running');
+  document.getElementById('rst-restore-log').textContent = data.message || '—';
+});
+
+async function rstCancelRestore() {
+  if (!rstCurrentRestoreId) return;
+  await api('POST', `/api/restore/cancel/${rstCurrentRestoreId}`);
+  toast('Cancellation requested');
+}
+
+async function rstLoadTestHistory() {
+  const r     = await api('GET', '/api/test-backup/results');
+  const tbody = document.getElementById('rst-test-history-body');
+  if (!r || !r.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">No tests run yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = r.map(t => `
+    <tr>
+      <td class="mono">${(t.started_at || '').slice(0, 16).replace('T', ' ')}</td>
+      <td class="mono">${t.dump_file || '—'}</td>
+      <td>${t.db_name || '—'}</td>
+      <td><span class="pill ${t.status}">${t.status}</span></td>
+      <td>${t.tables_ok || 0} ok / ${t.tables_fail || 0} fail</td>
+      <td class="mono">${t.duration_s ? t.duration_s.toFixed(1) + 's' : '—'}</td>
+    </tr>
+  `).join('');
+}
+
+async function loadRestorePage() {
+  await Promise.all([rstLoadHistory(), rstLoadDatabases(), rstLoadTestHistory()]);
+}
+
+// ── Calendar page ─────────────────────────────────────────
+let calData = [], calCurrentYear = new Date().getFullYear(),
+    calCurrentMonth = new Date().getMonth(), calCurrentView = 'calendar';
+const CAL_DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const CAL_MONTHS = ['January','February','March','April','May','June',
+                    'July','August','September','October','November','December'];
+const CAL_COLORS = [
+  {bg:'#eff3ff',border:'#c7d8fe',text:'#3b6ef5'},
+  {bg:'#edfaf5',border:'#a7f3d0',text:'#0ea271'},
+  {bg:'#fff8e6',border:'#fde68a',text:'#d08a00'},
+  {bg:'#fef0f1',border:'#fecdd3',text:'#e0394a'},
+  {bg:'#f3f0ff',border:'#ddd6fe',text:'#7c3aed'},
+  {bg:'#fff3ed',border:'#fed7aa',text:'#e06020'},
+];
+const calDbColors = {};
+let calColorIdx = 0;
+
+function calGetDbColor(name) {
+  if (!calDbColors[name]) { calDbColors[name] = CAL_COLORS[calColorIdx % CAL_COLORS.length]; calColorIdx++; }
+  return calDbColors[name];
+}
+
+async function loadCalendarPage() {
+  try {
+    const r = await fetch('/api/schedule/calendar?days=60');
+    calData = await r.json();
+    calRenderCalendar(); calRenderList(); calRenderLegend();
+  } catch(e) {
+    document.getElementById('cal-schedule-list').innerHTML =
+      '<p style="color:var(--muted);font-size:13px">Failed to load schedule data</p>';
+  }
+}
+
+function calRenderCalendar() {
+  document.getElementById('cal-month-label').textContent = CAL_MONTHS[calCurrentMonth] + ' ' + calCurrentYear;
+  const headers = document.getElementById('cal-headers');
+  headers.innerHTML = CAL_DAYS.map(d => `<div class="cal-day-header">${d}</div>`).join('');
+  const firstDay    = new Date(calCurrentYear, calCurrentMonth, 1).getDay();
+  const daysInMonth = new Date(calCurrentYear, calCurrentMonth + 1, 0).getDate();
+  const today       = new Date();
+  const eventsByDate = {};
+  calData.forEach(item => {
+    const dt = (item.run_at || item.next_run || '').slice(0, 10);
+    if (!dt) return;
+    if (!eventsByDate[dt]) eventsByDate[dt] = [];
+    eventsByDate[dt].push(item);
+  });
+  const cells = document.getElementById('cal-cells');
+  let html = '';
+  for (let i = 0; i < firstDay; i++) html += '<div class="cal-cell other-month"></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = calCurrentYear + '-' + String(calCurrentMonth + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    const isToday = today.getFullYear() === calCurrentYear && today.getMonth() === calCurrentMonth && today.getDate() === d;
+    const events  = eventsByDate[dateStr] || [];
+    const maxShow = 3;
+    const evHtml  = events.slice(0, maxShow).map(ev => {
+      const c    = calGetDbColor(ev.db_name || '');
+      const time = (ev.run_at || ev.next_run || '').slice(11, 16);
+      return `<div class="cal-event" title="${ev.db_name} - ${ev.cron}" style="background:${c.bg};border-color:${c.border};color:${c.text}">${time} ${ev.db_name || ''}</div>`;
+    }).join('');
+    const more = events.length > maxShow ? `<div class="cal-more">+${events.length - maxShow} more</div>` : '';
+    html += `<div class="cal-cell${isToday ? ' today' : ''}"><div class="cal-date${isToday ? ' today-num' : ''}">${d}</div>${evHtml}${more}</div>`;
+  }
+  const total = firstDay + daysInMonth;
+  const remaining = (7 - (total % 7)) % 7;
+  for (let i = 0; i < remaining; i++) html += '<div class="cal-cell other-month"></div>';
+  cells.innerHTML = html;
+}
+
+function calRenderList() {
+  const list   = document.getElementById('cal-schedule-list');
+  if (!calData.length) { list.innerHTML = '<p style="color:var(--muted);font-size:13px;padding:10px 0">No scheduled runs in the next 30 days</p>'; return; }
+  const sorted = [...calData].sort((a, b) => (a.run_at || a.next_run || '') < (b.run_at || b.next_run || '') ? -1 : 1);
+  list.innerHTML = sorted.slice(0, 100).map(item => {
+    const dt    = item.run_at || item.next_run || '';
+    const c     = calGetDbColor(item.db_name || '');
+    const local = dt ? new Date(dt).toLocaleString() : '?';
+    return `<div class="cal-sched-item"><div class="cal-sched-time" style="color:${c.text}">${local}</div><div><div class="cal-sched-name">${item.db_name || '—'}</div><div class="cal-sched-expr">${item.cron || ''}</div></div></div>`;
+  }).join('');
+}
+
+function calRenderLegend() {
+  const el  = document.getElementById('cal-schedules-legend');
+  const dbs = [...new Set(calData.map(i => i.db_name).filter(Boolean))];
+  if (!dbs.length) { el.innerHTML = '<p style="color:var(--muted);font-size:13px">No active schedules</p>'; return; }
+  el.innerHTML = dbs.map(db => {
+    const c = calGetDbColor(db);
+    return `<span style="display:inline-flex;align-items:center;gap:5px;margin:3px;padding:3px 10px;border-radius:5px;font-size:11px;font-weight:600;background:${c.bg};border:1px solid ${c.border};color:${c.text}">${db}</span>`;
+  }).join('');
+}
+
+function calChangeView(v) {
+  calCurrentView = v;
+  document.getElementById('cal-calendar-view').style.display = v === 'calendar' ? '' : 'none';
+  document.getElementById('cal-list-view').style.display     = v === 'list'     ? '' : 'none';
+}
+
+function calPrevMonth() {
+  calCurrentMonth--;
+  if (calCurrentMonth < 0) { calCurrentMonth = 11; calCurrentYear--; }
+  calRenderCalendar();
+}
+
+function calNextMonth() {
+  calCurrentMonth++;
+  if (calCurrentMonth > 11) { calCurrentMonth = 0; calCurrentYear++; }
+  calRenderCalendar();
 }
 
 // ── Init ──────────────────────────────────────────────────
