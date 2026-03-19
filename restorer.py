@@ -13,10 +13,12 @@ Supports:
 
 import os
 import re
+import sys
 import gzip
 import bz2
 import time
 import uuid
+import shutil
 import logging
 import tempfile
 import threading
@@ -73,6 +75,28 @@ def _port(cfg: dict) -> int:
         return int(raw) if raw else defaults.get(cfg.get('type', '').lower(), 5432)
     except (TypeError, ValueError):
         return defaults.get(cfg.get('type', '').lower(), 5432)
+
+
+def _find_executable(name: str) -> str:
+    """
+    Locate *name* on PATH using shutil.which().
+    On Windows also tries the .exe variant automatically.
+    Raises FileNotFoundError with a helpful message when not found.
+
+    Returns:
+        str: The full path to the executable.
+    """
+    path = shutil.which(name)
+    if path:
+        return path
+    if sys.platform == 'win32' and not name.lower().endswith('.exe'):
+        path = shutil.which(name + '.exe')
+        if path:
+            return path
+    raise FileNotFoundError(
+        f"'{name}' executable not found on PATH. "
+        f"Please install the database client tools and ensure they are in your PATH."
+    )
 
 
 # ── SQL preview parser ────────────────────────────────────────────────────────
@@ -264,7 +288,7 @@ class RestoreManager:
             env['PGPASSWORD'] = cfg.get('password', '')
 
             cmd = [
-                'psql',
+                _find_executable('psql'),
                 '-h', cfg.get('host', 'localhost'),
                 '-p', str(_port(cfg)),
                 '-U', cfg.get('user', 'postgres'),
@@ -321,7 +345,7 @@ class RestoreManager:
                 is_tmp = True
 
             cmd = [
-                'mysql',
+                _find_executable('mysql'),
                 '-h', cfg.get('host', 'localhost'),
                 '-P', str(_port(cfg)),
                 '-u', cfg.get('user', 'root'),
@@ -371,7 +395,7 @@ class RestoreManager:
                 sql_file = self._filter_sql_tables(sql_file, tables, restore_id)
                 is_tmp = True
 
-            cmd = ['sqlplus', '-S', conn_str, f'@{sql_file}']
+            cmd = [_find_executable('sqlplus'), '-S', conn_str, f'@{sql_file}']
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=7200)
             if result.returncode != 0:
                 err = (result.stderr or result.stdout or '').strip()[:500]
