@@ -38,7 +38,7 @@ app = Flask(__name__)
 app.secret_key = os.urandom(24)
 socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins='*')
 
-config_manager = ConfigManager('config.json')
+config_manager = ConfigManager(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json'))
 crypto         = get_crypto()
 retention_mgr  = RetentionManager(config_manager)
 verifier       = DumpVerifier()
@@ -93,7 +93,7 @@ def _run_dump_task(db_config, dump_id, save_path):
     cancel_flags[dump_id] = False
 
     try:
-        db_name = db_config.get('database', 'dump')
+        db_name = db_config.get('name') or db_config.get('database', 'dump')
         emit_progress(dump_id, {
             'status':     'running',
             'percent':    0,
@@ -380,7 +380,7 @@ def _run_scheduled_dump_with_retry(db_config, save_path, max_retries: int = 3,
     for attempt in range(max_retries + 1):
         dump_id = str(uuid.uuid4())
         cancel_flags[dump_id] = False
-        db_name = db_config.get('database', '?')
+        db_name = db_config.get('name') or db_config.get('database', '?')
 
         if attempt > 0:
             wait = base_wait * (2 ** (attempt - 1))
@@ -656,6 +656,20 @@ def retention_apply():
 
 # ── Schedules ────────────────────────────────────────────────────────────────
 
+def _make_dump_job(db_cfg, save_path, max_retries, base_wait):
+    """Return a callable suitable for APScheduler that runs a dump (with optional retries)."""
+    def fn():
+        if max_retries > 0:
+            socketio.start_background_task(
+                _run_scheduled_dump_with_retry, db_cfg, save_path, max_retries, base_wait
+            )
+        else:
+            socketio.start_background_task(
+                _run_dump_task, db_cfg, str(uuid.uuid4()), save_path
+            )
+    return fn
+
+
 @app.route('/api/schedules', methods=['GET'])
 def get_schedules():
     return jsonify(config_manager.get_schedules())
@@ -674,16 +688,8 @@ def add_schedule():
     max_retries = int(data.get('max_retries', 0))
     base_wait   = float(data.get('retry_wait', 60))
 
-    def scheduled_dump():
-        if max_retries > 0:
-            socketio.start_background_task(
-                _run_scheduled_dump_with_retry, db, save_path, max_retries, base_wait
-            )
-        else:
-            dump_id = str(uuid.uuid4())
-            socketio.start_background_task(_run_dump_task, db, dump_id, save_path)
-
-    job = scheduler.add_job(scheduled_dump, CronTrigger.from_crontab(data['cron']),
+    job = scheduler.add_job(_make_dump_job(db, save_path, max_retries, base_wait),
+                            CronTrigger.from_crontab(data['cron']),
                             id=sched_id, replace_existing=True)
     active_jobs[sched_id] = job
     config_manager.add_schedule(data)
@@ -701,6 +707,44 @@ def delete_schedule(sched_id):
     active_jobs.pop(sched_id, None)
     config_manager.delete_schedule(sched_id)
     return jsonify({'ok': True})
+
+
+@app.route('/api/schedules/<sched_id>', methods=['PUT'])
+def update_schedule(sched_id):
+    data      = request.json
+    schedules = config_manager.get_schedules()
+    for i, s in enumerate(schedules):
+        if s['id'] == sched_id:
+            s['db_id']       = data.get('db_id', s['db_id'])
+            s['cron']        = data.get('cron', s['cron'])
+            s['save_path']   = data.get('save_path', s.get('save_path', ''))
+            s['max_retries'] = int(data.get('max_retries', s.get('max_retries', 0)))
+            s['retry_wait']  = float(data.get('retry_wait', s.get('retry_wait', 60)))
+
+            db        = config_manager.get_database(s['db_id'])
+            save_path = (s.get('save_path') or
+                         config_manager.get_settings().get('default_save_path', './dumps'))
+            max_retries = s['max_retries']
+            base_wait   = s['retry_wait']
+
+            try:
+                scheduler.remove_job(sched_id)
+            except Exception:
+                pass
+
+            job = scheduler.add_job(_make_dump_job(db, save_path, max_retries, base_wait),
+                                    CronTrigger.from_crontab(s['cron']),
+                                    id=sched_id, replace_existing=True)
+            if not s.get('enabled', True):
+                job.pause()
+            active_jobs[sched_id] = job
+
+            schedules[i] = s
+            config_manager.save_schedules(schedules)
+            audit_logger.log('schedule_updated', resource=sched_id,
+                             details=f'cron={s["cron"]}, db={db.get("name") if db else "?"}')
+            return jsonify({'ok': True})
+    return jsonify({'ok': False}), 404
 
 
 @app.route('/api/schedules/<sched_id>/toggle', methods=['POST'])
@@ -807,20 +851,8 @@ def restore_schedules():
         max_retries = int(s.get('max_retries', 0))
         base_wait   = float(s.get('retry_wait', 60))
 
-        def make_job(db_cfg, sp, mr, bw):
-            def fn():
-                if mr > 0:
-                    socketio.start_background_task(
-                        _run_scheduled_dump_with_retry, db_cfg, sp, mr, bw
-                    )
-                else:
-                    socketio.start_background_task(
-                        _run_dump_task, db_cfg, str(uuid.uuid4()), sp
-                    )
-            return fn
-
         try:
-            job = scheduler.add_job(make_job(db, save_path, max_retries, base_wait),
+            job = scheduler.add_job(_make_dump_job(db, save_path, max_retries, base_wait),
                                     CronTrigger.from_crontab(s['cron']),
                                     id=s['id'], replace_existing=True)
             active_jobs[s['id']] = job

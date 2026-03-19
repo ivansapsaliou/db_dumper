@@ -114,8 +114,8 @@ nav{flex:1;padding:8px 10px;overflow-y:auto}
 /* ── Form ── */
 .form-group{margin-bottom:13px}
 label{display:block;font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px;letter-spacing:.02em}
-input[type=text],input[type=number],input[type=password],input[type=email],select,textarea{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;color:var(--text);font-family:var(--mono);transition:border-color .12s,box-shadow .12s;outline:none}
-input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
+input[type=text],input[type=number],input[type=password],input[type=email],input[type=date],select,textarea{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:13px;color:var(--text);font-family:var(--mono);transition:border-color .12s,box-shadow .12s;outline:none}
+input:focus,select:focus,textarea:focus,input[type=date]:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:11px}
 .form-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px}
 
@@ -1035,10 +1035,11 @@ canvas{max-height:300px}
 </div>
 </div>
 
-<!-- ══ Add Schedule Modal ══════════════════════════════ -->
+<!-- ══ Add/Edit Schedule Modal ══════════════════════════════ -->
 <div class="modal-backdrop" id="modal-sched">
 <div class="modal">
-  <div class="modal-title">Add Schedule</div>
+  <div class="modal-title" id="modal-sched-title">Add Schedule</div>
+  <input type="hidden" id="sched-edit-id">
   <div class="form-group"><label>Database</label><select id="sched-db-id"></select></div>
   <hr class="section-sep">
   <div class="section-label" style="margin-bottom:10px">Frequency</div>
@@ -1091,7 +1092,7 @@ canvas{max-height:300px}
   <div class="info-box">Retries use exponential backoff: wait × 1, wait × 2, wait × 4, …</div>
   <div class="modal-footer">
     <button class="btn btn-ghost" onclick="closeModal('modal-sched')">Cancel</button>
-    <button class="btn btn-primary" onclick="addSchedule()">Save</button>
+    <button class="btn btn-primary" onclick="saveSchedule()">Save</button>
   </div>
 </div>
 </div>
@@ -1917,13 +1918,17 @@ async function renderSchedules() {
         <div class="sched-db">${db?db.name:'?'} → ${s.save_path||'default'}</div>
       </div>
       <div class="toggle-row" onclick="toggleSched('${s.id}')" style="padding:0"><div class="toggle-sw ${s.enabled?'on':''}" id="sched-sw-${s.id}"></div></div>
-      <button class="btn-icon" onclick="deleteSched('${s.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+      <button class="btn-icon" title="Edit" onclick="openEditSchedule('${s.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+      <button class="btn-icon" title="Delete" onclick="deleteSched('${s.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
     </div>`;
   }).join('');
 }
 async function openAddSchedule() {
   await loadDBs();
   document.getElementById('sched-db-id').innerHTML = databases.map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
+  // Reset to add mode
+  document.getElementById('sched-edit-id').value = '';
+  document.getElementById('modal-sched-title').textContent = 'Add Schedule';
   // Reset builder to defaults
   schedMode = 'daily'; schedAdvanced = false;
   document.querySelectorAll('.sched-preset').forEach(b => b.classList.remove('active'));
@@ -1939,19 +1944,52 @@ async function openAddSchedule() {
   document.getElementById('sched-adv-note').textContent = 'Generated automatically from the settings above';
   document.getElementById('sched-adv-btn').textContent  = '✎ Edit manually';
   document.getElementById('sched-save-path').value = '';
+  document.getElementById('sched-max-retries').value = 0;
+  document.getElementById('sched-retry-wait').value = 60;
   const firstWd = document.querySelector('input[name="sched-weekday"][value="1"]');
   if (firstWd) firstWd.checked = true;
   document.getElementById('modal-sched').classList.add('open');
 }
-async function addSchedule() {
+async function openEditSchedule(id) {
+  const s = schedules.find(x => x.id === id);
+  if (!s) return;
+  await loadDBs();
+  document.getElementById('sched-db-id').innerHTML = databases.map(d=>`<option value="${d.id}"${d.id===s.db_id?' selected':''}>${d.name}</option>`).join('');
+  // Set edit mode
+  document.getElementById('sched-edit-id').value = id;
+  document.getElementById('modal-sched-title').textContent = 'Edit Schedule';
+  // Switch to advanced (manual) cron mode to show existing cron expression
+  schedAdvanced = true;
+  schedMode = 'daily';
+  document.querySelectorAll('.sched-preset').forEach(b => b.classList.remove('active'));
+  document.getElementById('sched-time-row').classList.remove('hidden');
+  document.getElementById('sched-weekday-row').classList.add('hidden');
+  const cronInput = document.getElementById('sched-cron');
+  cronInput.value = s.cron || '';
+  cronInput.removeAttribute('readonly');
+  cronInput.style.background = ''; cronInput.style.color = ''; cronInput.style.cursor = '';
+  document.getElementById('sched-adv-note').textContent = 'Edit cron manually. Format: minute hour day month weekday';
+  document.getElementById('sched-adv-btn').textContent  = '✕ Back to builder';
+  document.getElementById('sched-save-path').value = s.save_path || '';
+  document.getElementById('sched-max-retries').value = s.max_retries || 0;
+  document.getElementById('sched-retry-wait').value = s.retry_wait || 60;
+  document.getElementById('modal-sched').classList.add('open');
+}
+async function saveSchedule() {
+  const editId = document.getElementById('sched-edit-id').value;
   const data = {
     db_id: v('sched-db-id'), cron: v('sched-cron'), save_path: v('sched-save-path'),
     max_retries: parseInt(v('sched-max-retries')) || 0,
     retry_wait: parseFloat(v('sched-retry-wait')) || 60,
   };
   if (!data.cron) { toast('Enter a cron expression','err'); return; }
-  const r = await api('POST','/api/schedules',data);
-  if (r.ok) { closeModal('modal-sched'); renderSchedules(); toast('Schedule added'); }
+  let r;
+  if (editId) {
+    r = await api('PUT', `/api/schedules/${editId}`, data);
+  } else {
+    r = await api('POST', '/api/schedules', data);
+  }
+  if (r.ok) { closeModal('modal-sched'); renderSchedules(); toast(editId ? 'Schedule updated' : 'Schedule added'); }
   else toast(r.message||'Error','err');
 }
 async function toggleSched(id) {
