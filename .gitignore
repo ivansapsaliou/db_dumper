@@ -17,3 +17,4 @@ users.json
 dumps/
 # pytest cache
 .pytest_cache/
+nohup.out
