@@ -303,11 +303,20 @@ def _run_dump_task(db_config, dump_id, save_path):
 
             # Notifications
             notifier.notify('success', {
-                'db_name':     db_name,
-                'filename':    actual_filename,
-                'size':        size,
-                'finished_at': finished_at,
-                'cloud_url':   cloud_url,
+                'db_name':            db_name,
+                'db_host':            db_config.get('host', ''),
+                'db_type':            db_config.get('type', ''),
+                'filename':           actual_filename,
+                'size':               size,
+                'uncompressed_size':  uncompressed_size,
+                'duration_s':         round(dump_duration_s, 2),
+                'speed_mbps':         speed_mbps,
+                'rows_exported':      rows_exported,
+                'tables_exported':    tables_exported,
+                'compression_method': comp_fmt if (comp_fmt and comp_fmt != 'none') else None,
+                'compression_ratio':  compression_ratio,
+                'finished_at':        finished_at,
+                'cloud_url':          cloud_url,
             })
 
             # Audit log
@@ -336,6 +345,8 @@ def _run_dump_task(db_config, dump_id, save_path):
             }, namespace='/')
             notifier.notify('error', {
                 'db_name':     db_name,
+                'db_host':     db_config.get('host', ''),
+                'db_type':     db_config.get('type', ''),
                 'message':     last_msg,
                 'finished_at': finished_at,
             })
@@ -480,6 +491,19 @@ def test_connection(db_id):
     dumper = DatabaseDumper(db, socketio, None, None)
     ok, msg = dumper.test_connection()
     return jsonify({'ok': ok, 'message': msg})
+
+
+@app.route('/api/databases/<db_id>/size', methods=['POST'])
+def check_db_size(db_id):
+    stored = config_manager.get_database(db_id)
+    if not stored:
+        return jsonify({'ok': False, 'message': 'Database not found'}), 404
+    db = crypto.decrypt_db_config(stored)
+    dumper = DatabaseDumper(db, socketio, None, None)
+    ok, size_bytes, details = dumper.get_size()
+    if not ok:
+        return jsonify({'ok': False, 'message': details.get('error', 'Size check failed')})
+    return jsonify({'ok': True, 'size_bytes': size_bytes, **details})
 
 
 # ── Dumps ─────────────────────────────────────────────────────────────────────

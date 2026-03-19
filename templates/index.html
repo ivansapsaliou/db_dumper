@@ -1107,6 +1107,16 @@ canvas{max-height:300px}
 </div>
 </div>
 
+<div class="modal-backdrop" id="modal-dbsize">
+<div class="modal" style="max-width:540px">
+  <div class="modal-title" id="dbsize-title">Database Size</div>
+  <div id="dbsize-content"></div>
+  <div class="modal-footer">
+    <button class="btn btn-ghost" onclick="closeModal('modal-dbsize')">Close</button>
+  </div>
+</div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -1351,62 +1361,52 @@ async function refreshStats() {
       scales: { x: { ticks: { font: { size: 10 } } }, y: { ticks: { font: { size: 10 } } } } }
   });
 
-  // By DB chart — one merged column per DB: min→avg (green) + avg→max (amber) + thin Last marker
+  // By DB chart — horizontal bar with avg size per database + min/max in tooltip
   if (chartByDb) chartByDb.destroy();
   const ctx2 = document.getElementById('chart-bydb').getContext('2d');
   const MB = v => parseFloat((v / 1048576).toFixed(2));
   const dbData = s.by_db;
   const dbLabels = dbData.map(d => d.name);
+  const dbAvgs   = dbData.map(d => d.count > 0 ? MB(d.total_size / d.count) : MB(d.last_size));
+  const dbMins   = dbData.map(d => MB(d.min_size));
+  const dbMaxs   = dbData.map(d => MB(d.max_size));
   chartByDb = new Chart(ctx2, {
     type: 'bar',
     data: {
       labels: dbLabels,
-      datasets: [
-        {
-          label: 'Min → Avg',
-          data: dbData.map(d => [MB(d.min_size), MB(d.count > 0 ? d.total_size / d.count : d.min_size)]),
-          backgroundColor: 'rgba(14,162,113,.55)',
-          borderColor: '#0ea271', borderWidth: 1,
-          borderSkipped: false, order: 2,
-        },
-        {
-          label: 'Avg → Max',
-          data: dbData.map(d => [MB(d.count > 0 ? d.total_size / d.count : d.min_size), MB(d.max_size)]),
-          backgroundColor: 'rgba(208,138,0,.55)',
-          borderColor: '#d08a00', borderWidth: 1,
-          borderSkipped: false, order: 2,
-        },
-        {
-          label: 'Last',
-          data: dbData.map(d => {
-            const lv = MB(d.last_size);
-            const span = MB(d.max_size) - MB(d.min_size);
-            const half = Math.max(span * 0.025, 0.02);
-            return [lv - half, lv + half];
-          }),
-          backgroundColor: 'rgba(59,110,245,.9)',
-          borderColor: '#3b6ef5', borderWidth: 0,
-          borderSkipped: false, barPercentage: 0.2, order: 1,
-        },
-      ]
+      datasets: [{
+        label: 'Avg size (MB)',
+        data: dbAvgs,
+        backgroundColor: dbData.map(d => {
+          const avg = d.count > 0 ? d.total_size / d.count : d.last_size;
+          const ratio = d.max_size > 0 ? avg / d.max_size : 0;
+          return ratio > 0.9 ? 'rgba(224,57,74,.7)' : ratio > 0.6 ? 'rgba(208,138,0,.7)' : 'rgba(59,110,245,.7)';
+        }),
+        borderColor: dbData.map(d => {
+          const avg = d.count > 0 ? d.total_size / d.count : d.last_size;
+          const ratio = d.max_size > 0 ? avg / d.max_size : 0;
+          return ratio > 0.9 ? '#e0394a' : ratio > 0.6 ? '#d08a00' : '#3b6ef5';
+        }),
+        borderWidth: 1,
+        borderRadius: 4,
+        borderSkipped: false,
+      }]
     },
     options: {
-      grouped: false,
+      indexAxis: 'y',
       responsive: true,
       plugins: {
-        legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12 } },
+        legend: { display: false },
         tooltip: {
-          mode: 'index',
           callbacks: {
             label: (ctx) => {
-              if (ctx.datasetIndex !== 0) return null;
               const db = dbData[ctx.dataIndex];
-              if (!db) return null;
-              const avg = db.count > 0 ? db.total_size / db.count : db.min_size;
+              if (!db) return '';
+              const avg = db.count > 0 ? MB(db.total_size / db.count) : MB(db.last_size);
               return [
-                `Min:   ${MB(db.min_size)} MB`,
-                `Avg:   ${MB(avg)} MB`,
-                `Max:   ${MB(db.max_size)} MB`,
+                `Avg:   ${avg} MB`,
+                `Min:   ${dbMins[ctx.dataIndex]} MB`,
+                `Max:   ${dbMaxs[ctx.dataIndex]} MB`,
                 `Last:  ${MB(db.last_size)} MB`,
                 `Dumps: ${db.count}`,
               ];
@@ -1415,8 +1415,8 @@ async function refreshStats() {
         }
       },
       scales: {
-        x: { ticks: { font: { size: 10 }, maxRotation: 30 } },
-        y: { ticks: { font: { size: 10 } }, title: { display: true, text: 'MB', font: { size: 10 } } }
+        x: { beginAtZero: true, ticks: { font: { size: 10 } }, title: { display: true, text: 'MB', font: { size: 10 } } },
+        y: { ticks: { font: { size: 10 } } }
       }
     }
   });
@@ -1487,11 +1487,19 @@ function renderDBs() {
         </div>
         <div class="db-actions">
           <button class="btn btn-success btn-sm" onclick="openDumpModal('${db.id}')">▶ Dump</button>
+          <button class="btn-icon" title="Check DB size" data-dbsize-id="${db.id}" data-dbsize-name="${db.name.replace(/"/g,'&quot;')}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></button>
           <button class="btn-icon" title="Edit" onclick="editDB('${db.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
           <button class="btn-icon" title="Delete" onclick="deleteDB('${db.id}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
         </div>
       </div>`;
     }).join('');
+    // Attach size-check handlers via data attributes (avoids XSS from inline onclick)
+    el.querySelectorAll('button[data-dbsize-id]').forEach(btn => {
+      btn.addEventListener('click', () => checkDBSize(
+        btn.getAttribute('data-dbsize-id'),
+        btn.getAttribute('data-dbsize-name')
+      ));
+    });
   });
 }
 
@@ -1609,6 +1617,59 @@ async function deleteDB(id) {
   if (!confirm('Delete this database config?')) return;
   await api('DELETE', `/api/databases/${id}`); renderDBs(); toast('Deleted');
 }
+
+async function checkDBSize(dbId, dbName) {
+  const modal = document.getElementById('modal-dbsize');
+  const content = document.getElementById('dbsize-content');
+  document.getElementById('dbsize-title').textContent = `DB Size: ${dbName}`;
+  content.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px 0;text-align:center">⏳ Checking database size…</div>';
+  modal.classList.add('open');
+
+  const r = await api('POST', `/api/databases/${dbId}/size`);
+  if (!r.ok) {
+    content.innerHTML = `<div class="warn-box">❌ ${r.message || 'Size check failed'}</div>`;
+    return;
+  }
+
+  const fmt = b => {
+    if (!b) return '—';
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+    if (b < 1073741824) return (b/1048576).toFixed(2) + ' MB';
+    return (b/1073741824).toFixed(2) + ' GB';
+  };
+
+  let html = `<div class="info-box" style="margin-bottom:14px">
+    <span style="font-size:22px">💾</span>
+    <span style="font-size:18px;font-weight:700;font-family:var(--mono);margin-left:8px">${fmt(r.size_bytes)}</span>
+    ${r.size_bytes != null ? `<span style="color:var(--muted);font-size:12px;margin-left:6px">(${r.size_bytes.toLocaleString()} bytes)</span>` : ''}
+  </div>`;
+
+  if (r.tables && r.tables.length) {
+    html += `<div class="card-title" style="margin-bottom:8px">Top tables by size</div>
+    <table class="tbl">
+      <thead><tr><th>Table</th><th>Size</th><th style="width:120px">Share</th></tr></thead>
+      <tbody>`;
+    const total = r.size_bytes || 1;
+    r.tables.forEach(t => {
+      const pct = Math.min(100, ((t.size / total) * 100)).toFixed(1);
+      html += `<tr>
+        <td class="mono">${t.name}</td>
+        <td class="mono">${fmt(t.size)}</td>
+        <td><div style="display:flex;align-items:center;gap:6px">
+          <div style="flex:1;background:var(--surface3);border-radius:3px;height:6px;overflow:hidden">
+            <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:3px"></div>
+          </div>
+          <span style="font-size:10px;font-family:var(--mono);color:var(--muted)">${pct}%</span>
+        </div></td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+  }
+
+  content.innerHTML = html;
+}
+
 
 // ── Dump ─────────────────────────────────────────────────
 async function openDumpModal(dbId) {

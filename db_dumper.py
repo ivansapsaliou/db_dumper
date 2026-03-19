@@ -126,6 +126,47 @@ def _safe_val_mysql(v) -> str:
     return "'" + s + "'"
 
 
+# ── size parsing helpers ──────────────────────────────────────────────────────
+
+def _parse_pg_table_sizes(text: str) -> list:
+    rows = []
+    for line in text.splitlines():
+        parts = line.split('|')
+        if len(parts) >= 2:
+            name = parts[0].strip()
+            try:
+                size = int(parts[1].strip())
+                rows.append({'name': name, 'size': size})
+            except (ValueError, TypeError):
+                pass
+    return rows
+
+
+def _parse_mysql_table_sizes(text: str) -> list:
+    rows = []
+    for line in text.splitlines():
+        parts = line.split('\t')
+        if len(parts) >= 2:
+            name = parts[0].strip()
+            try:
+                size = int(float(parts[1].strip() or '0'))
+                rows.append({'name': name, 'size': size})
+            except (ValueError, TypeError):
+                pass
+    return rows
+
+
+def _parse_oracle_size(text: str) -> int:
+    for line in text.splitlines():
+        line = line.strip()
+        if line and line.replace('.', '', 1).isdigit():
+            try:
+                return int(float(line))
+            except (ValueError, TypeError):
+                pass
+    return 0
+
+
 class DatabaseDumper:
     def __init__(self, db_config: dict, socketio, dump_id, progress_cb,
                  cancel_check=None):
@@ -286,6 +327,151 @@ class DatabaseDumper:
             return True, 'Direct connection successful'
         except Exception as e:
             return False, str(e)
+
+    # ── database size ─────────────────────────────────────────────────────────
+
+    def get_size(self):
+        """
+        Returns (ok: bool, size_bytes: int, details: dict) with per-schema
+        breakdown where available, or (False, 0, {'error': str}) on failure.
+        """
+        try:
+            db_type = self.cfg.get('type', '').lower()
+            use_ssh = self.cfg.get('use_ssh', False)
+            if use_ssh:
+                return self._get_size_ssh(db_type)
+            else:
+                return self._get_size_direct(db_type)
+        except Exception as e:
+            logger.exception('get_size')
+            return False, 0, {'error': str(e)}
+
+    def _get_size_ssh(self, db_type: str):
+        cfg = self.cfg
+        client = self._ssh_client()
+        try:
+            if db_type == 'postgresql':
+                cmd = (
+                    f"PGPASSWORD={_q(cfg['password'])} "
+                    f"psql -h {_q(cfg['host'])} -p {_port(cfg)} "
+                    f"-U {_q(cfg['user'])} -d {_q(cfg['database'])} -t -q "
+                    f"-c \"SELECT pg_database_size(current_database())\" 2>/dev/null"
+                )
+                out, _, _ = self._ssh_run(client, cmd, timeout=30)
+                size = int(out.strip())
+                # Per-table breakdown
+                tbl_cmd = (
+                    f"PGPASSWORD={_q(cfg['password'])} "
+                    f"psql -h {_q(cfg['host'])} -p {_port(cfg)} "
+                    f"-U {_q(cfg['user'])} -d {_q(cfg['database'])} -t -q "
+                    f"-c \"SELECT schemaname||'.'||tablename, pg_total_relation_size(schemaname||'.'||tablename) "
+                    f"FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema') "
+                    f"ORDER BY 2 DESC LIMIT 10\" 2>/dev/null"
+                )
+                tbl_out, _, _ = self._ssh_run(client, tbl_cmd, timeout=30)
+                tables = _parse_pg_table_sizes(tbl_out)
+                return True, size, {'tables': tables}
+            elif db_type == 'mysql':
+                cmd = (
+                    f"mysql -h {_q(cfg['host'])} -P {_port(cfg)} "
+                    f"-u {_q(cfg['user'])} -p{_q(cfg['password'])} "
+                    f"-sN -e \"SELECT SUM(data_length+index_length) "
+                    f"FROM information_schema.tables WHERE table_schema=DATABASE()\" "
+                    f"{_q(cfg['database'])} 2>/dev/null"
+                )
+                out, _, _ = self._ssh_run(client, cmd, timeout=30)
+                size = int(float(out.strip() or '0'))
+                tbl_cmd = (
+                    f"mysql -h {_q(cfg['host'])} -P {_port(cfg)} "
+                    f"-u {_q(cfg['user'])} -p{_q(cfg['password'])} "
+                    f"-sN -e \"SELECT table_name, data_length+index_length "
+                    f"FROM information_schema.tables WHERE table_schema=DATABASE() "
+                    f"ORDER BY 2 DESC LIMIT 10\" "
+                    f"{_q(cfg['database'])} 2>/dev/null"
+                )
+                tbl_out, _, _ = self._ssh_run(client, tbl_cmd, timeout=30)
+                tables = _parse_mysql_table_sizes(tbl_out)
+                return True, size, {'tables': tables}
+            elif db_type == 'oracle':
+                svc = cfg.get('service_name') or cfg.get('database', '')
+                cmd = (
+                    f"echo \"SELECT SUM(bytes) FROM user_segments;\" | "
+                    f"sqlplus -S {_q(cfg['user'])}/{_q(cfg['password'])}"
+                    f"@{_q(cfg['host'])}:{_port(cfg)}/{_q(svc)} 2>/dev/null"
+                )
+                out, _, _ = self._ssh_run(client, cmd, timeout=30)
+                size = _parse_oracle_size(out)
+                return True, size, {}
+            else:
+                return False, 0, {'error': f'Unknown DB type: {db_type}'}
+        finally:
+            client.close()
+
+    def _get_size_direct(self, db_type: str):
+        cfg = self.cfg
+        if db_type == 'postgresql':
+            import psycopg2
+            conn = psycopg2.connect(
+                host=cfg['host'], port=_port(cfg),
+                user=cfg['user'], password=cfg['password'],
+                dbname=cfg['database'], connect_timeout=10,
+            )
+            try:
+                cur = conn.cursor()
+                cur.execute('SELECT pg_database_size(current_database())')
+                size = cur.fetchone()[0]
+                cur.execute(
+                    "SELECT schemaname||'.'||tablename, "
+                    "pg_total_relation_size(schemaname||'.'||tablename) "
+                    "FROM pg_tables "
+                    "WHERE schemaname NOT IN ('pg_catalog','information_schema') "
+                    "ORDER BY 2 DESC LIMIT 10"
+                )
+                tables = [{'name': r[0], 'size': r[1]} for r in cur.fetchall()]
+                return True, size, {'tables': tables}
+            finally:
+                conn.close()
+        elif db_type == 'mysql':
+            import pymysql
+            conn = pymysql.connect(
+                host=cfg['host'], port=_port(cfg),
+                user=cfg['user'], password=cfg['password'],
+                database=cfg['database'], connect_timeout=10,
+            )
+            try:
+                cur = conn.cursor()
+                cur.execute(
+                    'SELECT SUM(data_length+index_length) '
+                    'FROM information_schema.tables WHERE table_schema=DATABASE()'
+                )
+                row = cur.fetchone()
+                size = int(row[0]) if row[0] is not None else 0
+                cur.execute(
+                    'SELECT table_name, data_length+index_length '
+                    'FROM information_schema.tables WHERE table_schema=DATABASE() '
+                    'ORDER BY 2 DESC LIMIT 10'
+                )
+                tables = [{'name': r[0], 'size': int(r[1] or 0) if r[1] is not None else 0} for r in cur.fetchall()]
+                return True, size, {'tables': tables}
+            finally:
+                conn.close()
+        elif db_type == 'oracle':
+            import cx_Oracle
+            dsn = cx_Oracle.makedsn(
+                cfg['host'], _port(cfg),
+                service_name=cfg.get('service_name') or cfg.get('database'),
+            )
+            conn = cx_Oracle.connect(cfg['user'], cfg['password'], dsn)
+            try:
+                cur = conn.cursor()
+                cur.execute('SELECT SUM(bytes) FROM user_segments')
+                row = cur.fetchone()
+                size = int(row[0]) if row[0] is not None else 0
+                return True, size, {}
+            finally:
+                conn.close()
+        else:
+            return False, 0, {'error': f'Unknown DB type: {db_type}'}
 
     # ── main entry point ──────────────────────────────────────────────────────
 
