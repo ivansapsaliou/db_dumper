@@ -20,11 +20,9 @@ self.addEventListener('notificationclick', e => {
   const url = (e.notification.data && e.notification.data.url) || '/';
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      // Focus the first same-origin window without navigating it
       for (const client of list) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.navigate(url);
-          return client.focus();
-        }
+        if ('focus' in client) return client.focus();
       }
       if (self.clients.openWindow) return self.clients.openWindow(url);
     })

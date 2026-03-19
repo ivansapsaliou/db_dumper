@@ -95,7 +95,7 @@ const NotificationManager = (() => {
 
   function handleDumpEvent(data) {
     // Only notify if page is hidden (user not looking at it)
-    if (document.hidden || !document.hasFocus()) {
+    if (document.hidden) {
       show(data);
     }
   }

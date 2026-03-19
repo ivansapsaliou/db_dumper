@@ -1144,13 +1144,15 @@ function showPage(id) {
     const t = n.textContent.trim().toLowerCase();
     if ((id==='dumps'&&t.includes('active'))||(id!=='dumps'&&t.startsWith(id.slice(0,5)))) n.classList.add('active');
   });
+  // Stop health auto-refresh when navigating away
+  if (id !== 'health') { clearInterval(_hcAutoTimer); _hcAutoTimer = null; }
   ({
     dashboard: refreshDashboard, databases: renderDBs, dumps: renderDumps,
     schedules: renderSchedules, history: renderHistory,
     settings: loadSettings, notifications: loadNotifications, retention: loadRetention,
     storage: loadStorage, audit: renderAuditLog,
     reports: loadReports, restore: loadRestorePage, calendar: loadCalendarPage,
-    health: hcRefresh,
+    health: () => { hcRefresh(); const sel = document.getElementById('hc-auto-sel'); hcChangeAutoRefresh(sel ? sel.value : '60'); },
   }[id] || (()=>{}))();
 }
 
@@ -1273,7 +1275,7 @@ function hcRender() {
         <span class="hc-indicator ${r.ok?'ok':'down'}">●</span>
         <span class="hc-db-name">${_hcEsc(r.name||dbId)}</span>
         <span class="hc-db-type">${_hcEsc((r.db_type||'DB').toUpperCase())}</span>
-        <button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:10px;margin-left:auto" onclick="hcCheckOne('${_hcEsc(dbId)}')" title="Re-check">↻</button>
+        <button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:10px;margin-left:auto" data-db-id="${_hcEsc(dbId)}" title="Re-check">↻</button>
       </div>
       <div>
         <div class="hc-row"><span class="hc-label">Status</span><span class="pill ${r.ok?'done':'error'}">${r.ok?'Online':'Down'}</span></div>
@@ -1282,6 +1284,11 @@ function hcRender() {
         ${!r.ok && r.message ? `<div class="hc-error-msg">${_hcEsc(r.message)}</div>` : ''}
       </div>
     </div>`).join('')}</div>`;
+
+  // Attach re-check handlers via event delegation (avoids XSS from inline onclick)
+  container.querySelectorAll('button[data-db-id]').forEach(btn => {
+    btn.addEventListener('click', () => hcCheckOne(btn.getAttribute('data-db-id')));
+  });
 }
 
 async function hcRefresh() {
@@ -2526,11 +2533,6 @@ setToggle('db-del-remote', true);
 setToggle('n-tls', true);
 refreshDashboard();
 NotificationManager.init().then(() => _showNotifBanner());
-// Start health auto-refresh (60 s) in background
-_hcAutoTimer = setInterval(() => {
-  const healthPage = document.getElementById('page-health');
-  if (healthPage && healthPage.classList.contains('active')) hcRefresh();
-}, 60000);
 </script>
 </body>
 </html>

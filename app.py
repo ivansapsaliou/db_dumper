@@ -197,7 +197,9 @@ def _run_dump_task(db_config, dump_id, save_path):
                     logger.warning(f'Compression failed (continuing without): {e}')
 
             # ── Dump statistics ───────────────────────────────────────────────
-            speed_mbps = round(uncompressed_size / dump_duration_s / 1048576, 3) if dump_duration_s > 0 else 0.0
+            # Use a minimum 1 ms threshold to avoid unrealistic speed values
+            _eff_duration = max(dump_duration_s, 0.001)
+            speed_mbps = round(uncompressed_size / _eff_duration / 1048576, 3) if uncompressed_size > 0 else 0.0
             compression_ratio = round(uncompressed_size / compressed_size, 2) if compressed_size and compressed_size > 0 else None
             estimated_restore_time_s = round(size / (speed_mbps * 1048576), 1) if speed_mbps > 0 else None
             rows_exported   = getattr(dumper, 'rows_exported', 0)

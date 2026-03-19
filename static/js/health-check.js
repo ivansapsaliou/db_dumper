@@ -94,7 +94,7 @@ const HealthDashboard = (() => {
             ${indicator}
             <span class="hc-db-name">${_esc(r.name || dbId)}</span>
             <span class="hc-db-type">${_esc(dbTypeUpper)}</span>
-            <button class="btn btn-ghost btn-sm hc-refresh-btn" onclick="HealthDashboard.refreshOne('${_esc(dbId)}')" title="Refresh this database">↻</button>
+            <button class="btn btn-ghost btn-sm hc-refresh-btn" data-db-id="${_esc(dbId)}" title="Refresh this database">↻</button>
           </div>
           <div class="hc-card-body">
             <div class="hc-row">
@@ -115,6 +115,11 @@ const HealthDashboard = (() => {
     }).join('');
 
     container.innerHTML = `<div class="hc-grid">${cards}</div>`;
+
+    // Attach handlers via event delegation (avoids XSS from inline onclick)
+    container.querySelectorAll('button[data-db-id]').forEach(btn => {
+      btn.addEventListener('click', () => HealthDashboard.refreshOne(btn.getAttribute('data-db-id')));
+    });
   }
 
   function _esc(s) {

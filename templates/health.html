@@ -116,7 +116,7 @@ select{background:var(--surface);border:1px solid var(--border);border-radius:7p
     <option value="response_time">Response time</option>
   </select>
   <label style="margin-left:10px">Auto-refresh:</label>
-  <select id="hc-auto-sel" onchange="changeAutoRefresh(this.value)">
+  <select id="hc-auto-sel" onchange="hcChangeAutoRefresh(this.value)">
     <option value="0">Off</option>
     <option value="30">30 s</option>
     <option value="60" selected>60 s</option>
@@ -135,7 +135,7 @@ select{background:var(--surface);border:1px solid var(--border);border-radius:7p
   HealthDashboard.refresh();
   HealthDashboard.startAutoRefresh(60);
 
-  window.changeAutoRefresh = function(val) {
+  window.hcChangeAutoRefresh = function(val) {
     const secs = parseInt(val, 10);
     if (secs > 0) HealthDashboard.startAutoRefresh(secs);
     else HealthDashboard.stopAutoRefresh();
