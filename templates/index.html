@@ -7,6 +7,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="/static/js/notifications.js"></script>
+<script src="/static/js/health-check.js"></script>
 <style>
 :root{
   --bg:#f0f2f7;--surface:#fff;--surface2:#f5f7fb;--surface3:#e8ecf4;
@@ -244,6 +246,31 @@ canvas{max-height:300px}
 .cal-sched-name{font-size:12px;font-weight:500}
 .cal-sched-expr{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px}
 @media(max-width:700px){.cal-cell{min-height:50px}.cal-event{display:none}}
+
+/* ── Health Check Dashboard ── */
+.hc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.hc-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px 15px;box-shadow:var(--shadow);transition:border-color .15s}
+.hc-card.hc-ok{border-left:3px solid var(--green)}
+.hc-card.hc-down{border-left:3px solid var(--red)}
+.hc-card-header{display:flex;align-items:center;gap:7px;margin-bottom:9px}
+.hc-indicator{font-size:13px;flex-shrink:0}
+.hc-indicator.ok{color:var(--green)}
+.hc-indicator.down{color:var(--red);animation:hc-pulse 1.4s ease-in-out infinite}
+@keyframes hc-pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.hc-db-name{font-size:12px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hc-db-type{font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;background:var(--surface2);color:var(--muted);font-family:var(--mono);border:1px solid var(--border);flex-shrink:0}
+.hc-row{display:flex;align-items:center;justify-content:space-between;font-size:11px;padding:2px 0}
+.hc-label{color:var(--muted);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.hc-value{font-family:var(--mono);font-size:11px;color:var(--text2)}
+.hc-error-msg{margin-top:6px;padding:5px 8px;background:var(--red-bg);border-radius:5px;font-size:10px;color:var(--red);font-family:var(--mono);word-break:break-word;line-height:1.4}
+.hc-stat-pill{font-size:11px;font-weight:500;padding:4px 11px;border-radius:7px;border:1px solid var(--border);background:var(--surface)}
+.hc-stat-pill b{color:var(--text)}
+.hc-stat-pill.ok b{color:var(--green)}
+.hc-stat-pill.down b{color:var(--red)}
+
+/* ── Browser Notifications banner ── */
+.notif-banner{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--accent-bg);border:1px solid #c7d8fe;border-radius:8px;margin-bottom:14px;font-size:12px;color:var(--text2)}
+.notif-banner.hidden{display:none!important}
 </style>
 </head>
 <body>
@@ -287,6 +314,11 @@ canvas{max-height:300px}
       History
     </div>
     <div class="nav-sec">Advanced</div>
+    <div class="nav-item" onclick="showPage('health')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      Health
+      <span class="nav-badge" id="health-badge" style="display:none"></span>
+    </div>
     <div class="nav-item" onclick="showPage('restore')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.33"/></svg>
       Restore
@@ -325,6 +357,14 @@ canvas{max-height:300px}
 
 <!-- ══ Main ════════════════════════════════════════════ -->
 <main class="main">
+
+<!-- Browser Notification Permission Banner -->
+<div class="notif-banner hidden" id="notif-banner">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+  <span style="flex:1">Enable browser notifications to receive alerts when dumps complete, even when this tab is inactive.</span>
+  <button class="btn btn-primary btn-sm" onclick="enableBrowserNotifications()">Enable</button>
+  <button class="btn btn-ghost btn-sm" onclick="dismissNotifBanner()">Dismiss</button>
+</div>
 
 <!-- Dashboard -->
 <div id="page-dashboard" class="page active">
@@ -841,6 +881,40 @@ canvas{max-height:300px}
   </div>
 </div>
 
+<!-- ══ Health Check ══════════════════════════════════════ -->
+<div id="page-health" class="page">
+  <div class="page-header">
+    <div class="page-title">🩺 Health Check Dashboard</div>
+    <div class="page-actions" style="display:flex;gap:8px;align-items:center">
+      <span id="hc-last-refreshed" style="font-size:11px;color:var(--muted)"></span>
+      <button class="btn btn-ghost btn-sm" id="hc-refresh-btn" onclick="hcRefresh()">↻ Refresh</button>
+    </div>
+  </div>
+  <div id="hc-summary" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap"></div>
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+    <label style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Filter:</label>
+    <select id="hc-filter" onchange="hcSetFilter(this.value)" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:5px 9px;font-size:12px;color:var(--text);outline:none">
+      <option value="all">All databases</option>
+      <option value="ok">Healthy only</option>
+      <option value="down">Down only</option>
+    </select>
+    <label style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-left:8px">Sort:</label>
+    <select id="hc-sort" onchange="hcSetSort(this.value)" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:5px 9px;font-size:12px;color:var(--text);outline:none">
+      <option value="status">Status (down first)</option>
+      <option value="name">Name</option>
+      <option value="response_time">Response time</option>
+    </select>
+    <label style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-left:8px">Auto-refresh:</label>
+    <select id="hc-auto-sel" onchange="hcChangeAutoRefresh(this.value)" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:5px 9px;font-size:12px;color:var(--text);outline:none">
+      <option value="0">Off</option>
+      <option value="30">30 s</option>
+      <option value="60" selected>60 s</option>
+      <option value="120">2 min</option>
+    </select>
+  </div>
+  <div id="hc-cards"><div class="empty-state">Click Refresh to check databases…</div></div>
+</div>
+
 </main><!-- /main -->
 
 <!-- ══ Add/Edit DB Modal ═══════════════════════════════ -->
@@ -1070,12 +1144,15 @@ function showPage(id) {
     const t = n.textContent.trim().toLowerCase();
     if ((id==='dumps'&&t.includes('active'))||(id!=='dumps'&&t.startsWith(id.slice(0,5)))) n.classList.add('active');
   });
+  // Stop health auto-refresh when navigating away
+  if (id !== 'health') { clearInterval(_hcAutoTimer); _hcAutoTimer = null; }
   ({
     dashboard: refreshDashboard, databases: renderDBs, dumps: renderDumps,
     schedules: renderSchedules, history: renderHistory,
     settings: loadSettings, notifications: loadNotifications, retention: loadRetention,
     storage: loadStorage, audit: renderAuditLog,
     reports: loadReports, restore: loadRestorePage, calendar: loadCalendarPage,
+    health: () => { hcRefresh(); const sel = document.getElementById('hc-auto-sel'); hcChangeAutoRefresh(sel ? sel.value : '60'); },
   }[id] || (()=>{}))();
 }
 
@@ -1098,6 +1175,151 @@ socket.on('progress', data => {
   renderDumps(); updateDumpBadge();
   if (data.status === 'done' || data.status === 'error') { loadHistory(); refreshStats(); }
 });
+
+socket.on('dump_notification', data => {
+  NotificationManager.handleDumpEvent(data);
+});
+
+// ── Browser Notifications ─────────────────────────────────
+async function enableBrowserNotifications() {
+  const perm = await NotificationManager.requestPermission();
+  if (perm === 'granted') {
+    NotificationManager.savePreference(true);
+    await NotificationManager.registerServiceWorker();
+    document.getElementById('notif-banner').classList.add('hidden');
+    toast('Browser notifications enabled ✓');
+    localStorage.setItem('notif-banner-dismissed', '1');
+  } else {
+    toast('Notification permission denied', 'err');
+  }
+}
+
+function dismissNotifBanner() {
+  document.getElementById('notif-banner').classList.add('hidden');
+  localStorage.setItem('notif-banner-dismissed', '1');
+}
+
+function _showNotifBanner() {
+  if (!NotificationManager.isSupported()) return;
+  if (NotificationManager.getPermission() === 'granted') return;
+  if (localStorage.getItem('notif-banner-dismissed')) return;
+  document.getElementById('notif-banner').classList.remove('hidden');
+}
+
+// ── Health Check page ─────────────────────────────────────
+let _hcData = {};
+let _hcAutoTimer = null;
+let _hcSortBy = 'status';
+let _hcFilter = 'all';
+
+function _hcFmtMs(ms) {
+  if (ms == null) return '—';
+  return ms < 1000 ? ms.toFixed(0)+' ms' : (ms/1000).toFixed(2)+'s';
+}
+function _hcTimeAgo(iso) {
+  if (!iso) return '—';
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (d < 5) return 'just now';
+  if (d < 60) return d+'s ago';
+  if (d < 3600) return Math.floor(d/60)+'m ago';
+  return Math.floor(d/3600)+'h ago';
+}
+function _hcEsc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function hcRender() {
+  const container = document.getElementById('hc-cards');
+  if (!container) return;
+  const entries = Object.entries(_hcData);
+  const filtered = entries.filter(([,r]) => {
+    if (_hcFilter === 'ok')   return r.ok;
+    if (_hcFilter === 'down') return !r.ok;
+    return true;
+  });
+  const total   = entries.length;
+  const healthy = entries.filter(([,r]) => r.ok).length;
+  const down    = total - healthy;
+
+  // Summary strip
+  const sumEl = document.getElementById('hc-summary');
+  if (sumEl) {
+    sumEl.innerHTML =
+      `<span class="hc-stat-pill"><b>${total}</b> databases</span>` +
+      `<span class="hc-stat-pill ok"><b>${healthy}</b> healthy</span>` +
+      `<span class="hc-stat-pill${down?' down':''}"><b>${down}</b> down</span>`;
+  }
+  // Badge in nav
+  const badge = document.getElementById('health-badge');
+  if (badge) {
+    if (down > 0) { badge.textContent = down; badge.style.display = ''; badge.classList.add('red'); }
+    else { badge.style.display = 'none'; }
+  }
+
+  if (!filtered.length) {
+    container.innerHTML = '<div class="empty-state">No databases match the current filter.</div>';
+    return;
+  }
+
+  const sorted = filtered.slice().sort((a, b) => {
+    if (_hcSortBy === 'name')          return (a[1].name||a[0]).localeCompare(b[1].name||b[0]);
+    if (_hcSortBy === 'response_time') return (a[1].response_time_ms||0)-(b[1].response_time_ms||0);
+    if (!a[1].ok && b[1].ok) return -1;
+    if (a[1].ok && !b[1].ok) return 1;
+    return (a[1].name||a[0]).localeCompare(b[1].name||b[0]);
+  });
+
+  container.innerHTML = `<div class="hc-grid">${sorted.map(([dbId, r]) => `
+    <div class="hc-card ${r.ok?'hc-ok':'hc-down'}">
+      <div class="hc-card-header">
+        <span class="hc-indicator ${r.ok?'ok':'down'}">●</span>
+        <span class="hc-db-name">${_hcEsc(r.name||dbId)}</span>
+        <span class="hc-db-type">${_hcEsc((r.db_type||'DB').toUpperCase())}</span>
+        <button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:10px;margin-left:auto" data-db-id="${_hcEsc(dbId)}" title="Re-check">↻</button>
+      </div>
+      <div>
+        <div class="hc-row"><span class="hc-label">Status</span><span class="pill ${r.ok?'done':'error'}">${r.ok?'Online':'Down'}</span></div>
+        <div class="hc-row"><span class="hc-label">Response</span><span class="hc-value">${_hcFmtMs(r.response_time_ms)}</span></div>
+        <div class="hc-row"><span class="hc-label">Checked</span><span class="hc-value">${_hcTimeAgo(r.checked_at)}</span></div>
+        ${!r.ok && r.message ? `<div class="hc-error-msg">${_hcEsc(r.message)}</div>` : ''}
+      </div>
+    </div>`).join('')}</div>`;
+
+  // Attach re-check handlers via event delegation (avoids XSS from inline onclick)
+  container.querySelectorAll('button[data-db-id]').forEach(btn => {
+    btn.addEventListener('click', () => hcCheckOne(btn.getAttribute('data-db-id')));
+  });
+}
+
+async function hcRefresh() {
+  const btn = document.getElementById('hc-refresh-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch('/api/health/databases');
+    _hcData = await res.json();
+    hcRender();
+    const el = document.getElementById('hc-last-refreshed');
+    if (el) el.textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch(e) { toast('Health check failed: '+e.message, 'err'); }
+  finally { if (btn) btn.disabled = false; }
+}
+
+async function hcCheckOne(dbId) {
+  try {
+    const res = await fetch(`/api/health/check/${dbId}`, {method:'POST'});
+    const result = await res.json();
+    _hcData[dbId] = result;
+    hcRender();
+  } catch(e) { toast('Check failed: '+e.message, 'err'); }
+}
+
+function hcSetSort(by) { _hcSortBy = by; hcRender(); }
+function hcSetFilter(f) { _hcFilter = f; hcRender(); }
+function hcChangeAutoRefresh(val) {
+  clearInterval(_hcAutoTimer); _hcAutoTimer = null;
+  const secs = parseInt(val, 10);
+  if (secs > 0) _hcAutoTimer = setInterval(hcRefresh, secs * 1000);
+}
 
 // ── Dashboard ────────────────────────────────────────────
 async function refreshDashboard() {
@@ -2310,6 +2532,7 @@ function calNextMonth() {
 setToggle('db-del-remote', true);
 setToggle('n-tls', true);
 refreshDashboard();
+NotificationManager.init().then(() => _showNotifBanner());
 </script>
 </body>
 </html>

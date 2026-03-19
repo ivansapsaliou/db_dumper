@@ -8,6 +8,7 @@ import time
 import uuid
 import shutil
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -67,6 +68,11 @@ scheduler.start()
 active_jobs    = {}   # sched_id -> APScheduler job
 dump_progress  = {}   # dump_id  -> progress dict
 cancel_flags   = {}   # dump_id  -> bool (True = cancel requested)
+
+# ── Health check cache ────────────────────────────────────────────────────────
+_health_cache     = {}   # db_id -> result dict
+_health_cache_ts  = {}   # db_id -> float (epoch seconds)
+_HEALTH_CACHE_TTL = 30   # seconds
 
 
 # ── Progress helpers ──────────────────────────────────────────────────────────
@@ -133,7 +139,9 @@ def _run_dump_task(db_config, dump_id, save_path):
         dumper = DatabaseDumper(db_config, socketio, dump_id, emit_progress,
                                 cancel_check=lambda: is_cancelled(dump_id))
 
+        dump_start_time = time.time()
         success = dumper.dump(filepath)
+        dump_duration_s = time.time() - dump_start_time
 
         # Cancelled?
         if cancel_flags.get(dump_id):
@@ -162,11 +170,13 @@ def _run_dump_task(db_config, dump_id, save_path):
         if success:
             actual_filepath = getattr(dumper, '_local_filepath_actual', None) or filepath
             actual_filename = os.path.basename(actual_filepath)
-            size = os.path.getsize(actual_filepath) if os.path.exists(actual_filepath) else 0
+            uncompressed_size = os.path.getsize(actual_filepath) if os.path.exists(actual_filepath) else 0
+            size = uncompressed_size
 
             # ── Compression on-the-fly ────────────────────────────────────────
             comp_cfg = settings.get('compression', {})
             comp_fmt = comp_cfg.get('format', 'none')
+            compressed_size = None
             if comp_fmt and comp_fmt != 'none' and not os.path.isdir(actual_filepath):
                 try:
                     emit_progress(dump_id, {
@@ -180,10 +190,20 @@ def _run_dump_task(db_config, dump_id, save_path):
                     )
                     actual_filepath = compressed_path
                     actual_filename = os.path.basename(actual_filepath)
-                    size = os.path.getsize(actual_filepath) if os.path.exists(actual_filepath) else 0
+                    compressed_size = os.path.getsize(actual_filepath) if os.path.exists(actual_filepath) else 0
+                    size = compressed_size
                     logger.info(f'Dump compressed: {actual_filename}')
                 except Exception as e:
                     logger.warning(f'Compression failed (continuing without): {e}')
+
+            # ── Dump statistics ───────────────────────────────────────────────
+            # Use a minimum 1 ms threshold to avoid unrealistic speed values
+            _eff_duration = max(dump_duration_s, 0.001)
+            speed_mbps = round(uncompressed_size / _eff_duration / 1048576, 3) if uncompressed_size > 0 else 0.0
+            compression_ratio = round(uncompressed_size / compressed_size, 2) if compressed_size and compressed_size > 0 else None
+            estimated_restore_time_s = round(size / (speed_mbps * 1048576), 1) if speed_mbps > 0 else None
+            rows_exported   = getattr(dumper, 'rows_exported', 0)
+            tables_exported = getattr(dumper, 'tables_exported', 0)
 
             # Verification
             verify_result = None
@@ -231,19 +251,29 @@ def _run_dump_task(db_config, dump_id, save_path):
                     logger.warning(f'WebDAV upload exception: {e}')
 
             history_item = {
-                'dump_id':    dump_id,
-                'db_id':      db_config.get('id'),
-                'db_name':    db_name,
-                'filename':   actual_filename,
-                'filepath':   actual_filepath,
-                'size':       size,
-                'status':     'done',
-                'created_at': datetime.now().isoformat(),
-                'verify':     verify_result,
-                'cloud_url':  cloud_url,
+                'dump_id':                dump_id,
+                'db_id':                  db_config.get('id'),
+                'db_name':                db_name,
+                'filename':               actual_filename,
+                'filepath':               actual_filepath,
+                'size':                   size,
+                'uncompressed_size':      uncompressed_size,
+                'compressed_size':        compressed_size,
+                'compression_method':     comp_fmt if (comp_fmt and comp_fmt != 'none') else None,
+                'duration_s':             round(dump_duration_s, 2),
+                'speed_mbps':             speed_mbps,
+                'compression_ratio':      compression_ratio,
+                'rows_exported':          rows_exported,
+                'tables_exported':        tables_exported,
+                'estimated_restore_time_s': estimated_restore_time_s,
+                'status':                 'done',
+                'created_at':             datetime.now().isoformat(),
+                'verify':                 verify_result,
+                'cloud_url':              cloud_url,
             }
             config_manager.add_history(history_item)
 
+            finished_at = datetime.now().isoformat()
             emit_progress(dump_id, {
                 'status':      'done',
                 'percent':     100,
@@ -251,17 +281,32 @@ def _run_dump_task(db_config, dump_id, save_path):
                 'file':        actual_filepath,
                 'filename':    actual_filename,
                 'size':        size,
-                'finished_at': datetime.now().isoformat(),
+                'duration_s':  round(dump_duration_s, 2),
+                'speed_mbps':  speed_mbps,
+                'finished_at': finished_at,
                 'verify':      verify_result,
                 'cloud_url':   cloud_url,
             })
+
+            # Browser notification event
+            socketio.emit('dump_notification', {
+                'dump_id':     dump_id,
+                'status':      'done',
+                'db_name':     db_name,
+                'filename':    actual_filename,
+                'size':        size,
+                'duration_s':  round(dump_duration_s, 2),
+                'speed_mbps':  speed_mbps,
+                'finished_at': finished_at,
+                'cloud_url':   cloud_url,
+            }, namespace='/')
 
             # Notifications
             notifier.notify('success', {
                 'db_name':     db_name,
                 'filename':    actual_filename,
                 'size':        size,
-                'finished_at': datetime.now().isoformat(),
+                'finished_at': finished_at,
                 'cloud_url':   cloud_url,
             })
 
@@ -274,16 +319,25 @@ def _run_dump_task(db_config, dump_id, save_path):
 
         else:
             last_msg = dump_progress.get(dump_id, {}).get('message', 'Unknown error')
+            finished_at = datetime.now().isoformat()
             emit_progress(dump_id, {
                 'status':      'error',
                 'percent':     0,
                 'message':     last_msg,
-                'finished_at': datetime.now().isoformat(),
+                'finished_at': finished_at,
             })
+            # Browser notification event for errors
+            socketio.emit('dump_notification', {
+                'dump_id':     dump_id,
+                'status':      'error',
+                'db_name':     db_name,
+                'message':     last_msg,
+                'finished_at': finished_at,
+            }, namespace='/')
             notifier.notify('error', {
                 'db_name':     db_name,
                 'message':     last_msg,
-                'finished_at': datetime.now().isoformat(),
+                'finished_at': finished_at,
             })
             audit_logger.log('dump_error', resource=db_name, status='error', details=last_msg)
 
@@ -1160,6 +1214,98 @@ def reports_page():
 @app.route('/calendar')
 def calendar_page():
     return render_template('calendar.html')
+
+
+@app.route('/health')
+def health_page():
+    return render_template('health.html')
+
+
+# ── Service worker (must be served from root scope) ───────────────────────────
+
+@app.route('/service-worker.js')
+def service_worker():
+    sw_path = os.path.join(app.root_path, 'static', 'service-worker.js')
+    if os.path.exists(sw_path):
+        return send_file(sw_path, mimetype='application/javascript')
+    # Minimal inline service worker if file doesn't exist
+    sw_content = (
+        "self.addEventListener('push', e => {"
+        "  const d = e.data ? e.data.json() : {};"
+        "  self.registration.showNotification(d.title || 'DB Dump', {"
+        "    body: d.body || '', icon: d.icon || '/static/icon.png', data: d"
+        "  });"
+        "});"
+        "self.addEventListener('notificationclick', e => {"
+        "  e.notification.close();"
+        "  const url = (e.notification.data && e.notification.data.url) || '/';"
+        "  e.waitUntil(clients.openWindow(url));"
+        "});"
+    )
+    from flask import Response
+    return Response(sw_content, mimetype='application/javascript')
+
+
+# ── Health check API ──────────────────────────────────────────────────────────
+
+def _check_db_health(db: dict) -> tuple:
+    """Test a single database connection and return (db_id, result_dict)."""
+    db_id   = db.get('id', '')
+    db_name = db.get('database', db_id)
+    now     = time.time()
+
+    # Return cached result if still fresh
+    if db_id in _health_cache and now - _health_cache_ts.get(db_id, 0) < _HEALTH_CACHE_TTL:
+        return db_id, _health_cache[db_id]
+
+    t0 = time.time()
+    try:
+        db_decrypted = crypto.decrypt_db_config(db)
+        dumper = DatabaseDumper(db_decrypted, None, None, None)
+        ok, msg = dumper.test_connection()
+    except Exception as exc:
+        ok, msg = False, str(exc)
+
+    response_time_ms = round((time.time() - t0) * 1000, 1)
+    result = {
+        'ok':               ok,
+        'message':          msg,
+        'name':             db.get('name') or db_name,
+        'db_type':          db.get('type', 'postgresql'),
+        'checked_at':       datetime.now().isoformat(),
+        'response_time_ms': response_time_ms,
+    }
+    _health_cache[db_id]    = result
+    _health_cache_ts[db_id] = time.time()
+    return db_id, result
+
+
+@app.route('/api/health/databases', methods=['GET'])
+def health_databases():
+    """Return health status for all configured databases (parallel, cached 30 s)."""
+    dbs = config_manager.get_databases()
+    results = {}
+    with ThreadPoolExecutor(max_workers=min(10, max(1, len(dbs)))) as exe:
+        futures = [exe.submit(_check_db_health, db) for db in dbs]
+        for f in futures:
+            try:
+                db_id, result = f.result(timeout=15)
+                results[db_id] = result
+            except Exception as exc:
+                logger.warning(f'Health check future failed: {exc}')
+    return jsonify(results)
+
+
+@app.route('/api/health/check/<db_id>', methods=['POST'])
+def health_check_single(db_id):
+    """Force-refresh health check for a single database (bypass cache)."""
+    db = config_manager.get_database(db_id)
+    if not db:
+        return jsonify({'ok': False, 'message': 'Database not found'}), 404
+    # Invalidate cache so _check_db_health performs a fresh check
+    _health_cache_ts.pop(db_id, None)
+    _, result = _check_db_health(db)
+    return jsonify(result)
 
 
 if __name__ == '__main__':

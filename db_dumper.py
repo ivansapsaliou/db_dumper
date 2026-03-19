@@ -136,6 +136,10 @@ class DatabaseDumper:
         self.cancel_check = cancel_check or (lambda: False)
         self._remote_filepath_actual = None
         self._local_filepath_actual  = None
+        # ── Dump statistics counters ──────────────────────────────────────────
+        self.rows_exported   = 0
+        self.tables_exported = 0
+        self.dump_start_time = None
 
     # ── progress ──────────────────────────────────────────────────────────────
 
@@ -909,6 +913,7 @@ class DatabaseDumper:
                     return False
                 pct = 20 + int((idx / max(total, 1)) * (55 if no_data else 45))
                 self._emit(pct, f'Table {idx+1}/{total}: "{schema}"."{table}"')
+                self.tables_exported += 1
 
                 if not no_schema:
                     cur.execute("""
@@ -948,6 +953,7 @@ class DatabaseDumper:
                         rows_sql = []
                         for row in chunk:
                             rows_sql.append('(' + ', '.join(_safe_val(v) for v in row) + ')')
+                            self.rows_exported += 1
                         f.write(f'\nINSERT INTO "{schema}"."{table}" ({cols_str}) VALUES\n')
                         f.write(',\n'.join(rows_sql) + ';\n')
                         chunk = cur.fetchmany(500)
@@ -1119,6 +1125,7 @@ class DatabaseDumper:
                     return False
                 pct = 22 + int((idx / max(total, 1)) * 70)
                 self._emit(pct, f'Table {idx+1}/{total}: {table}')
+                self.tables_exported += 1
 
                 if not no_schema:
                     cur.execute(f"SHOW CREATE TABLE `{table}`")
@@ -1141,6 +1148,7 @@ class DatabaseDumper:
                     while chunk:
                         rows_sql = ['(' + ', '.join(_safe_val_mysql(v) for v in row) + ')'
                                     for row in chunk]
+                        self.rows_exported += len(chunk)
                         f.write(f"\nINSERT INTO `{table}` ({cols_str}) VALUES\n")
                         f.write(',\n'.join(rows_sql) + ';\n')
                         chunk = cur.fetchmany(500)
@@ -1200,6 +1208,7 @@ class DatabaseDumper:
             for idx, table in enumerate(tables):
                 pct = 18 + int((idx / max(total, 1)) * 55)
                 self._emit(pct, f'Table {idx+1}/{total}: {table}')
+                self.tables_exported += 1
 
                 if not no_schema:
                     cur.execute("""
@@ -1233,6 +1242,7 @@ class DatabaseDumper:
                         for row in chunk:
                             vals = [_safe_val(v) for v in row]
                             f.write(f'INSERT INTO "{table}" ({cols_str}) VALUES ({", ".join(vals)});\n')
+                        self.rows_exported += len(chunk)
                         chunk = cur.fetchmany(200)
 
             if not no_schema:
