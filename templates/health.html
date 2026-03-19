@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Health Check — DB Dump Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="/static/js/health-check.js"></script>
+<style>
+:root{
+  --bg:#f0f2f7;--surface:#fff;--surface2:#f5f7fb;--surface3:#e8ecf4;
+  --border:#dde2ee;--border2:#c8cfe0;
+  --accent:#3b6ef5;--accent-bg:#eff3ff;
+  --green:#0ea271;--green-bg:#edfaf5;
+  --red:#e0394a;--red-bg:#fef0f1;
+  --yellow:#d08a00;--yellow-bg:#fff8e6;
+  --text:#1a2035;--text2:#4a5578;--muted:#8892aa;
+  --radius:10px;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.04);
+  --mono:'JetBrains Mono',monospace;--sans:'Inter',sans-serif;
+}
+[data-theme="dark"]{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--surface3:#2a2f45;
+  --border:#2e3350;--border2:#3d4460;
+  --accent:#5b8af5;--accent-bg:#1a2040;
+  --green:#22c98a;--green-bg:#0d2a1e;
+  --red:#f05060;--red-bg:#2a1018;
+  --yellow:#f0b030;--yellow-bg:#2a2008;
+  --text:#e8eaf5;--text2:#a0a8c8;--muted:#606880;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;padding:28px 32px}
+
+/* ── Header ── */
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:10px}
+.page-title{font-size:20px;font-weight:700;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
+.page-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* ── Summary strip ── */
+.hc-summary{display:flex;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+.hc-stat{font-size:13px;font-weight:500;color:var(--text2);padding:5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px}
+.hc-stat b{color:var(--text)}
+.hc-stat.ok b{color:var(--green)}
+.hc-stat.down b{color:var(--red)}
+
+/* ── Filter / Sort bar ── */
+.hc-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.hc-toolbar label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+select{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:5px 9px;font-size:12px;color:var(--text);font-family:var(--sans);outline:none}
+
+/* ── Cards grid ── */
+.hc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.hc-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow);transition:border-color .15s}
+.hc-card.hc-ok{border-left:3px solid var(--green)}
+.hc-card.hc-down{border-left:3px solid var(--red);background:#fff8f8}
+[data-theme="dark"] .hc-card.hc-down{background:rgba(240,80,96,.04)}
+.hc-card-header{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.hc-indicator{font-size:14px;flex-shrink:0}
+.hc-indicator.ok{color:var(--green)}
+.hc-indicator.down{color:var(--red);animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.hc-db-name{font-size:13px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hc-db-type{font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;background:var(--surface2);color:var(--muted);font-family:var(--mono);border:1px solid var(--border);flex-shrink:0}
+.hc-refresh-btn{padding:3px 7px!important;font-size:11px!important;margin-left:auto;flex-shrink:0}
+.hc-card-body{display:flex;flex-direction:column;gap:5px}
+.hc-row{display:flex;align-items:center;justify-content:space-between;font-size:11px}
+.hc-label{color:var(--muted);font-weight:500;font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+.hc-value{font-family:var(--mono);font-size:11px;color:var(--text2)}
+.hc-error-msg{margin-top:6px;padding:6px 8px;background:var(--red-bg);border-radius:5px;font-size:10px;color:var(--red);font-family:var(--mono);word-break:break-word;line-height:1.4}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:6px;border:none;cursor:pointer;padding:7px 13px;border-radius:7px;font-size:12px;font-weight:600;font-family:var(--sans);transition:all .12s;white-space:nowrap}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#2d5ce0}
+.btn-ghost{background:var(--surface2);color:var(--text2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-bg)}
+.btn-sm{padding:5px 9px;font-size:11px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* ── Pill ── */
+.pill{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.04em;text-transform:uppercase}
+.pill.done{background:var(--green-bg);color:var(--green)}
+.pill.error{background:var(--red-bg);color:var(--red)}
+
+/* ── Misc ── */
+.empty-state{text-align:center;padding:44px 20px;color:var(--muted);font-size:13px}
+.meta-bar{font-size:11px;color:var(--muted);margin-top:10px}
+.back-link{font-size:12px;color:var(--accent);text-decoration:none;font-weight:600}
+.back-link:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="page-header">
+  <div class="page-title">
+    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="color:var(--green)"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+    Health Check Dashboard
+    <a href="/" class="back-link" style="font-size:12px;margin-left:8px">← Back to App</a>
+  </div>
+  <div class="page-actions">
+    <span id="hc-last-refreshed" class="meta-bar"></span>
+    <button class="btn btn-primary btn-sm" id="hc-refresh-btn" onclick="HealthDashboard.refresh()">↻ Refresh</button>
+  </div>
+</div>
+
+<div class="hc-summary" id="hc-summary"></div>
+
+<div class="hc-toolbar">
+  <label>Filter:</label>
+  <select onchange="HealthDashboard.setFilter(this.value)">
+    <option value="all">All databases</option>
+    <option value="ok">Healthy only</option>
+    <option value="down">Down only</option>
+  </select>
+  <label style="margin-left:10px">Sort:</label>
+  <select onchange="HealthDashboard.setSort(this.value)">
+    <option value="status">Status (down first)</option>
+    <option value="name">Name</option>
+    <option value="response_time">Response time</option>
+  </select>
+  <label style="margin-left:10px">Auto-refresh:</label>
+  <select id="hc-auto-sel" onchange="changeAutoRefresh(this.value)">
+    <option value="0">Off</option>
+    <option value="30">30 s</option>
+    <option value="60" selected>60 s</option>
+    <option value="120">2 min</option>
+    <option value="300">5 min</option>
+  </select>
+</div>
+
+<div id="hc-cards"><div class="empty-state">Loading…</div></div>
+
+<script>
+(function(){
+  // Apply saved theme
+  if (localStorage.getItem('theme') === 'dark') document.documentElement.setAttribute('data-theme','dark');
+
+  HealthDashboard.refresh();
+  HealthDashboard.startAutoRefresh(60);
+
+  window.changeAutoRefresh = function(val) {
+    const secs = parseInt(val, 10);
+    if (secs > 0) HealthDashboard.startAutoRefresh(secs);
+    else HealthDashboard.stopAutoRefresh();
+  };
+})();
+</script>
+</body>
+</html>
