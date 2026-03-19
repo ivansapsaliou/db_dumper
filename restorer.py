@@ -328,7 +328,7 @@ class RestoreManager:
                 f"-p{cfg.get('password', '')}",
                 cfg.get('database', ''),
             ]
-            with open(sql_file, 'rb') as f_in:
+            with open(sql_file, 'r', encoding='utf-8', errors='replace') as f_in:
                 result = subprocess.run(cmd, stdin=f_in, capture_output=True,
                                         text=True, timeout=7200)
             if result.returncode != 0:
