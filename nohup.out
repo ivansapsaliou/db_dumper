@@ -1,0 +1,18 @@
+/home/runner/work/db_dumper/db_dumper/app.py:1: DeprecationWarning: 
+Eventlet is deprecated. It is currently being maintained in bugfix mode, and
+we strongly recommend against using it for new projects.
+
+If you are already using Eventlet, we recommend migrating to a different
+framework.  For more detail see
+https://eventlet.readthedocs.io/en/latest/asyncio/migration.html
+
+  import eventlet
+2026-03-19 09:31:25,580 - INFO - Scheduler started
+2026-03-19 09:31:53,842 - ERROR - get_size
+Traceback (most recent call last):
+  File "/home/runner/work/db_dumper/db_dumper/db_dumper.py", line 344, in get_size
+    return self._get_size_direct(db_type)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/db_dumper/db_dumper/db_dumper.py", line 435, in _get_size_direct
+    import pymysql
+ModuleNotFoundError: No module named 'pymysql'
