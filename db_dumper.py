@@ -630,6 +630,7 @@ class DatabaseDumper:
         dump_mode = cfg.get('dump_mode', 'full')
         dump_filename = posixpath.basename(remote_path)
 
+        parfile_path = None
         if use_expdp:
             # expdp needs a DIRECTORY object in Oracle pointing to remote_dir
             dir_obj = 'DBDUMP_TMP_DIR'
@@ -642,19 +643,40 @@ class DatabaseDumper:
             self._ssh_run(client,
                 f"echo {_q(setup_sql)} | sqlplus -S {_q(conn_str)}", timeout=30)
 
-            content_flag = {
-                'schema_only': 'CONTENT=METADATA_ONLY',
-                'data_only':   'CONTENT=DATA_ONLY',
+            content_val = {
+                'schema_only': 'METADATA_ONLY',
+                'data_only':   'DATA_ONLY',
             }.get(dump_mode, '')
 
-            schemas = cfg.get('include_schemas', [cfg['user']])
-            cmd = (
-                f"{dump_bin} userid={_q(conn_str)} "
-                f"directory={dir_obj} dumpfile={_q(dump_filename)} "
-                f"logfile=dbdump_expdp_{posixpath.splitext(dump_filename)[0]}.log "
-                f"schemas={','.join(schemas)} "
-                f"{content_flag}"
-            )
+            # Ensure schemas list is never empty to avoid "schemas=" with no value
+            schemas = cfg.get('include_schemas') or [cfg['user']]
+            logfile_name = f"dbdump_expdp_{posixpath.splitext(dump_filename)[0]}.log"
+
+            # Use a parfile to avoid LRM command-line parsing issues when CONTENT
+            # is combined with other parameters (e.g. LRM-00116 syntax error).
+            parfile_path = remote_path + '.par'
+            parfile_lines = [
+                f"USERID={conn_str}",
+                f"DIRECTORY={dir_obj}",
+                f"DUMPFILE={dump_filename}",
+                f"LOGFILE={logfile_name}",
+                f"SCHEMAS={','.join(schemas)}",
+            ]
+            if content_val:
+                parfile_lines.append(f"CONTENT={content_val}")
+            parfile_content = '\n'.join(parfile_lines) + '\n'
+
+            # Write parfile via SFTP to avoid any shell-quoting/injection concerns
+            try:
+                _sftp = client.open_sftp()
+                with _sftp.open(parfile_path, 'w') as _pf:
+                    _pf.write(parfile_content)
+                _sftp.close()
+            except Exception as _exc:
+                self._emit(0, f'Failed to write expdp parfile: {_exc}', 'error')
+                return False
+
+            cmd = f"{dump_bin} parfile={_q(parfile_path)}"
         else:
             rows_flag = 'N' if dump_mode == 'schema_only' else 'Y'
             cmd = (
@@ -665,7 +687,12 @@ class DatabaseDumper:
             )
 
         self._emit(20, 'Running Oracle export on remote server (may take a while)…')
-        out, err, rc = self._ssh_run(client, cmd, timeout=14400)
+        try:
+            out, err, rc = self._ssh_run(client, cmd, timeout=14400)
+        finally:
+            # Always remove the parfile — it contains credentials
+            if parfile_path:
+                self._ssh_run(client, f"rm -f {_q(parfile_path)}", timeout=10)
 
         # expdp: rc=0 success, rc=5 warnings — both OK
         if rc not in (0, 5):
