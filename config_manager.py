@@ -26,12 +26,14 @@ DEFAULT_CONFIG = {
                 "smtp_user": "",
                 "smtp_password": "",
                 "to": "",
-                "use_tls": True
+                "use_tls": True,
+                "frequency": "per_dump"
             },
             "telegram": {
                 "enabled": False,
                 "bot_token": "",
-                "chat_id": ""
+                "chat_id": "",
+                "frequency": "per_dump"
             },
             "webhook": {
                 "enabled": False,
@@ -130,3 +132,33 @@ class ConfigManager:
         cfg = self._read()
         cfg['settings'] = settings
         self._write(cfg)
+
+    # Digest queue (stored in a companion file next to config.json)
+    def _digest_queue_path(self) -> str:
+        base = os.path.splitext(self.path)[0]
+        return base + '_digest_queue.json'
+
+    def get_digest_queue(self) -> list:
+        path = self._digest_queue_path()
+        with _lock:
+            if not os.path.exists(path):
+                return []
+            with open(path, 'r', encoding='utf-8') as f:
+                try:
+                    return json.load(f)
+                except Exception:
+                    return []
+
+    def save_digest_queue(self, queue: list):
+        path = self._digest_queue_path()
+        with _lock:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(queue, f, indent=2, ensure_ascii=False)
+
+    def add_to_digest_queue(self, entry: dict):
+        queue = self.get_digest_queue()
+        queue.append(entry)
+        self.save_digest_queue(queue)
+
+    def clear_digest_queue(self):
+        self.save_digest_queue([])

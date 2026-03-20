@@ -15,30 +15,41 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
+# ── Formatting helpers ────────────────────────────────────────────────────────
+
+def _fmt_size(b: int) -> str:
+    if not b:
+        return '—'
+    for unit in ('B', 'KB', 'MB', 'GB'):
+        if b < 1024:
+            return f'{b:.1f} {unit}'
+        b /= 1024
+    return f'{b:.2f} TB'
+
+
+def _fmt_duration(seconds: float) -> str:
+    if not seconds:
+        return '—'
+    s = int(seconds)
+    if s < 60:
+        return f'{s}s'
+    m, s = divmod(s, 60)
+    if m < 60:
+        return f'{m}m {s}s'
+    h, m = divmod(m, 60)
+    return f'{h}h {m}m {s}s'
+
+
 class NotificationManager:
-    def __init__(self, settings: dict):
+    def __init__(self, settings: dict, digest_queue_mgr=None):
         self.settings = settings or {}
+        self._digest_queue_mgr = digest_queue_mgr
 
     def _fmt_size(self, b: int) -> str:
-        if not b:
-            return '—'
-        for unit in ('B', 'KB', 'MB', 'GB'):
-            if b < 1024:
-                return f'{b:.1f} {unit}'
-            b /= 1024
-        return f'{b:.2f} TB'
+        return _fmt_size(b)
 
     def _fmt_duration(self, seconds: float) -> str:
-        if not seconds:
-            return '—'
-        s = int(seconds)
-        if s < 60:
-            return f'{s}s'
-        m, s = divmod(s, 60)
-        if m < 60:
-            return f'{m}m {s}s'
-        h, m = divmod(m, 60)
-        return f'{h}h {m}m {s}s'
+        return _fmt_duration(seconds)
 
     def notify(self, event: str, dump_info: dict):
         """
@@ -55,10 +66,18 @@ class NotificationManager:
         title, body, html_body = self._build_message(event, dump_info)
 
         if cfg.get('email', {}).get('enabled'):
-            self._send_email(cfg['email'], title, body, html_body)
+            email_cfg = cfg['email']
+            if email_cfg.get('frequency', 'per_dump') == 'daily_digest':
+                self._enqueue_digest('email', event, dump_info)
+            else:
+                self._send_email(email_cfg, title, body, html_body)
 
         if cfg.get('telegram', {}).get('enabled'):
-            self._send_telegram(cfg['telegram'], title, body)
+            tg_cfg = cfg['telegram']
+            if tg_cfg.get('frequency', 'per_dump') == 'daily_digest':
+                self._enqueue_digest('telegram', event, dump_info)
+            else:
+                self._send_telegram(tg_cfg, title, body)
 
         if cfg.get('webhook', {}).get('enabled'):
             self._send_webhook(cfg['webhook'], event, dump_info, body)
@@ -131,6 +150,88 @@ class NotificationManager:
             html_body = _build_error_html(title, db, db_type, db_host, msg, ts)
 
         return title, body, html_body
+
+    # ── Digest queue ───────────────────────────────────────────────────────────
+
+    def _enqueue_digest(self, channel: str, event: str, dump_info: dict):
+        """Add a notification to the daily digest queue."""
+        if self._digest_queue_mgr is None:
+            logger.warning('Digest queue manager not set; falling back to immediate send')
+            cfg = self.settings.get('notifications', {})
+            title, body, html_body = self._build_message(event, dump_info)
+            if channel == 'email':
+                self._send_email(cfg.get('email', {}), title, body, html_body)
+            elif channel == 'telegram':
+                self._send_telegram(cfg.get('telegram', {}), title, body)
+            return
+        entry = {
+            'channel':   channel,
+            'event':     event,
+            'dump_info': dump_info,
+            'queued_at': datetime.now().isoformat(),
+        }
+        self._digest_queue_mgr.add_to_digest_queue(entry)
+        logger.info(f'Queued {event} notification for daily {channel} digest')
+
+    def send_daily_digest(self):
+        """Send the daily digest for all queued notifications and clear the queue."""
+        if self._digest_queue_mgr is None:
+            return
+        queue = self._digest_queue_mgr.get_digest_queue()
+        if not queue:
+            logger.info('Daily digest: queue is empty, nothing to send')
+            return
+
+        cfg = self.settings.get('notifications', {})
+        if not cfg.get('enabled'):
+            self._digest_queue_mgr.clear_digest_queue()
+            return
+
+        date_str = datetime.now().strftime('%Y-%m-%d')
+
+        # Split by channel
+        email_entries  = [e for e in queue if e['channel'] == 'email']
+        tg_entries     = [e for e in queue if e['channel'] == 'telegram']
+
+        email_cfg = cfg.get('email', {})
+        if email_cfg.get('enabled') and email_entries:
+            title    = f'📋 DB Dump Daily Digest — {date_str}'
+            body     = self._build_digest_body(email_entries, date_str)
+            html_body = _build_digest_html(email_entries, date_str)
+            self._send_email(email_cfg, title, body, html_body)
+
+        tg_cfg = cfg.get('telegram', {})
+        if tg_cfg.get('enabled') and tg_entries:
+            title = f'📋 DB Dump Daily Digest — {date_str}'
+            body  = self._build_digest_body(tg_entries, date_str)
+            self._send_telegram(tg_cfg, title, body)
+
+        self._digest_queue_mgr.clear_digest_queue()
+        logger.info(f'Daily digest sent: {len(email_entries)} email, {len(tg_entries)} telegram entries')
+
+    def _build_digest_body(self, entries: list, date_str: str) -> str:
+        """Build plain-text digest body from queued entries."""
+        total   = len(entries)
+        ok      = sum(1 for e in entries if e['event'] == 'success')
+        failed  = total - ok
+        lines   = [
+            f'Daily Digest: {date_str}',
+            f'Total dumps:  {total}  (✅ {ok} OK, ❌ {failed} failed)',
+            '',
+        ]
+        for i, e in enumerate(entries, 1):
+            info   = e.get('dump_info', {})
+            icon   = '✅' if e['event'] == 'success' else '❌'
+            db     = info.get('db_name', '?')
+            ts     = (info.get('finished_at') or e.get('queued_at', '?'))[:19].replace('T', ' ')
+            sz     = self._fmt_size(info.get('size', 0))
+            dur    = self._fmt_duration(info.get('duration_s'))
+            msg    = info.get('message', '')
+            if e['event'] == 'success':
+                lines.append(f'{i}. {icon} {db}  |  {sz}  |  {dur}  |  {ts}')
+            else:
+                lines.append(f'{i}. {icon} {db}  |  {msg[:60]}  |  {ts}')
+        return '\n'.join(lines)
 
     # ── Email ──────────────────────────────────────────────────────────────────
 
@@ -347,6 +448,78 @@ def _build_error_html(title, db, db_type, db_host, msg, ts) -> str:
   </div>
   <div style="background:#f5f7fb;padding:12px 28px;font-size:11px;color:#8892aa;border-top:1px solid #dde2ee">
     DB Dump Manager — automated backup notification
+  </div>
+</div>
+</body></html>'''
+
+
+def _build_digest_html(entries: list, date_str: str) -> str:
+    """Build an HTML email for the daily digest."""
+    total  = len(entries)
+    ok     = sum(1 for e in entries if e['event'] == 'success')
+    failed = total - ok
+
+    rows_html = ''
+    for i, e in enumerate(entries):
+        info    = e.get('dump_info', {})
+        event   = e['event']
+        icon    = '✅' if event == 'success' else '❌'
+        db      = _esc(info.get('db_name', '?'))
+        ts      = _esc((info.get('finished_at') or e.get('queued_at', '?'))[:19].replace('T', ' '))
+        bg      = '#fff' if i % 2 == 0 else '#f5f7fb'
+        status_color = '#0ea271' if event == 'success' else '#e0394a'
+
+        if event == 'success':
+            sz  = _esc(_fmt_size(info.get('size', 0)))
+            dur = _esc(_fmt_duration(info.get('duration_s')))
+            detail = f'{sz} · {dur}'
+        else:
+            detail = _esc((info.get('message') or 'error')[:60])
+
+        rows_html += f'''
+        <tr style="background:{bg}">
+          <td style="padding:6px 10px;font-size:18px">{icon}</td>
+          <td style="padding:6px 10px;font-weight:600;color:{status_color}">{db}</td>
+          <td style="padding:6px 10px;font-family:monospace;font-size:12px;color:#6b7a99">{detail}</td>
+          <td style="padding:6px 10px;font-family:monospace;font-size:11px;color:#8892aa">{ts}</td>
+        </tr>'''
+
+    return f'''<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f0f2f7;font-family:Inter,Arial,sans-serif">
+<div style="max-width:620px;margin:32px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,.08)">
+  <div style="background:#3b6ef5;padding:20px 28px">
+    <div style="font-size:22px;margin-bottom:4px">📋</div>
+    <div style="color:#fff;font-size:17px;font-weight:700">DB Dump Daily Digest — {_esc(date_str)}</div>
+  </div>
+  <div style="padding:20px 28px">
+    <div style="display:flex;gap:24px;margin-bottom:20px">
+      <div style="flex:1;background:#f5f7fb;border-radius:8px;padding:12px 16px;text-align:center">
+        <div style="font-size:24px;font-weight:700">{total}</div>
+        <div style="font-size:12px;color:#6b7a99;margin-top:2px">Total dumps</div>
+      </div>
+      <div style="flex:1;background:#f0faf5;border-radius:8px;padding:12px 16px;text-align:center">
+        <div style="font-size:24px;font-weight:700;color:#0ea271">{ok}</div>
+        <div style="font-size:12px;color:#6b7a99;margin-top:2px">Successful</div>
+      </div>
+      <div style="flex:1;background:#fff5f6;border-radius:8px;padding:12px 16px;text-align:center">
+        <div style="font-size:24px;font-weight:700;color:#e0394a">{failed}</div>
+        <div style="font-size:12px;color:#6b7a99;margin-top:2px">Failed</div>
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="background:#f5f7fb">
+          <th style="padding:6px 10px;text-align:left;color:#6b7a99;font-weight:600;font-size:11px"></th>
+          <th style="padding:6px 10px;text-align:left;color:#6b7a99;font-weight:600;font-size:11px">Database</th>
+          <th style="padding:6px 10px;text-align:left;color:#6b7a99;font-weight:600;font-size:11px">Details</th>
+          <th style="padding:6px 10px;text-align:left;color:#6b7a99;font-weight:600;font-size:11px">Time</th>
+        </tr>
+      </thead>
+      <tbody>{rows_html}
+      </tbody>
+    </table>
+  </div>
+  <div style="background:#f5f7fb;padding:12px 28px;font-size:11px;color:#8892aa;border-top:1px solid #dde2ee">
+    DB Dump Manager — daily digest notification
   </div>
 </div>
 </body></html>'''
