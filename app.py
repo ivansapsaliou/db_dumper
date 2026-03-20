@@ -50,7 +50,7 @@ rbac_manager   = get_rbac_manager()
 def _notifier_fn(event: str, details: dict):
     """Notification bridge for BackupTester."""
     settings = config_manager.get_settings()
-    notifier = NotificationManager(settings)
+    notifier = NotificationManager(settings, digest_queue_mgr=config_manager)
     notifier.notify(event, details)
 
 
@@ -165,7 +165,7 @@ def _run_dump_task(db_config, dump_id, save_path):
             return
 
         settings = config_manager.get_settings()
-        notifier = NotificationManager(settings)
+        notifier = NotificationManager(settings, digest_queue_mgr=config_manager)
 
         if success:
             actual_filepath = getattr(dumper, '_local_filepath_actual', None) or filepath
@@ -397,7 +397,7 @@ def _run_scheduled_dump_with_retry(db_config, save_path, max_retries: int = 3,
 
     # All retries exhausted
     settings = config_manager.get_settings()
-    notifier = NotificationManager(settings)
+    notifier = NotificationManager(settings, digest_queue_mgr=config_manager)
     notifier.notify('error', {
         'db_name':     db_name,
         'message':     f'All {max_retries+1} attempts failed. Last error: {last_error}',
@@ -635,9 +635,25 @@ def save_settings_route():
 @app.route('/api/notifications/test/<channel>', methods=['POST'])
 def test_notification(channel):
     settings = config_manager.get_settings()
-    notifier = NotificationManager(settings)
+    notifier = NotificationManager(settings, digest_queue_mgr=config_manager)
     ok, msg  = notifier.test(channel)
     return jsonify({'ok': ok, 'message': msg})
+
+
+@app.route('/api/notifications/digest/send', methods=['POST'])
+def send_digest_now():
+    """Manually trigger the daily digest (sends all queued notifications)."""
+    settings = config_manager.get_settings()
+    notifier = NotificationManager(settings, digest_queue_mgr=config_manager)
+    notifier.send_daily_digest()
+    return jsonify({'ok': True, 'message': 'Daily digest sent'})
+
+
+def _send_daily_digest_job():
+    """APScheduler job: send daily digest at midnight."""
+    settings = config_manager.get_settings()
+    notifier = NotificationManager(settings, digest_queue_mgr=config_manager)
+    notifier.send_daily_digest()
 
 
 # ── Retention ────────────────────────────────────────────────────────────────
@@ -858,6 +874,11 @@ def restore_schedules():
             active_jobs[s['id']] = job
         except Exception as e:
             logger.warning(f'Could not restore schedule {s["id"]}: {e}')
+
+    # Daily digest job — runs every day at midnight
+    scheduler.add_job(_send_daily_digest_job,
+                      CronTrigger.from_crontab('0 0 * * *'),
+                      id='__daily_digest__', replace_existing=True)
 
 
 # ── Audit Log ─────────────────────────────────────────────────────────────────

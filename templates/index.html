@@ -560,7 +560,16 @@ canvas{max-height:300px}
       <div class="form-group"><label>SMTP User</label><input id="n-smtp-user" type="text" placeholder="you@gmail.com"></div>
       <div class="form-group"><label>SMTP Password</label><input id="n-smtp-pass" type="password" placeholder="app password"></div>
     </div>
-    <div class="form-group"><label>Send To (comma-sep)</label><input id="n-email-to" type="text" placeholder="admin@company.com"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Send To (comma-sep)</label><input id="n-email-to" type="text" placeholder="admin@company.com"></div>
+      <div class="form-group">
+        <label>Send Frequency</label>
+        <select id="n-email-freq">
+          <option value="per_dump">Per Dump (immediately)</option>
+          <option value="daily_digest">Daily Digest (once a day)</option>
+        </select>
+      </div>
+    </div>
     <button class="btn btn-ghost btn-sm" onclick="testNotif('email')">Send Test Email</button>
   </div>
 
@@ -574,6 +583,13 @@ canvas{max-height:300px}
     <div class="form-row">
       <div class="form-group"><label>Bot Token</label><input id="n-tg-token" type="text" placeholder="123456:ABC-DEF…"></div>
       <div class="form-group"><label>Chat ID</label><input id="n-tg-chat" type="text" placeholder="-100123456789"></div>
+    </div>
+    <div class="form-group">
+      <label>Send Frequency</label>
+      <select id="n-tg-freq">
+        <option value="per_dump">Per Dump (immediately)</option>
+        <option value="daily_digest">Daily Digest (once a day)</option>
+      </select>
     </div>
     <div class="info-box">Get your Chat ID by messaging @userinfobot on Telegram.</div>
     <button class="btn btn-ghost btn-sm" onclick="testNotif('telegram')">Send Test Message</button>
@@ -2047,9 +2063,11 @@ async function loadNotifications() {
   document.getElementById('n-smtp-pass').value = em.smtp_password||'';
   document.getElementById('n-email-to').value  = em.to||'';
   setToggle('n-tls', em.use_tls!==false);
+  document.getElementById('n-email-freq').value = em.frequency||'per_dump';
   const tg = n.telegram||{}; setToggle('n-tg', tg.enabled);
   document.getElementById('n-tg-token').value = tg.bot_token||'';
   document.getElementById('n-tg-chat').value  = tg.chat_id||'';
+  document.getElementById('n-tg-freq').value  = tg.frequency||'per_dump';
   const wh = n.webhook||{}; setToggle('n-wh', wh.enabled);
   document.getElementById('n-wh-url').value = wh.url||'';
 }
@@ -2058,8 +2076,10 @@ async function saveNotifications() {
   existing.notifications = {
     enabled: !!bools['n-enabled'],
     email: { enabled:!!bools['n-email'], smtp_host:v('n-smtp-host'), smtp_port:parseInt(v('n-smtp-port'))||587,
-             smtp_user:v('n-smtp-user'), smtp_password:v('n-smtp-pass'), to:v('n-email-to'), use_tls:!!bools['n-tls'] },
-    telegram: { enabled:!!bools['n-tg'], bot_token:v('n-tg-token'), chat_id:v('n-tg-chat') },
+             smtp_user:v('n-smtp-user'), smtp_password:v('n-smtp-pass'), to:v('n-email-to'), use_tls:!!bools['n-tls'],
+             frequency:v('n-email-freq')||'per_dump' },
+    telegram: { enabled:!!bools['n-tg'], bot_token:v('n-tg-token'), chat_id:v('n-tg-chat'),
+                frequency:v('n-tg-freq')||'per_dump' },
     webhook:  { enabled:!!bools['n-wh'], url:v('n-wh-url') },
   };
   await api('POST','/api/settings', existing); toast('Notifications saved');
